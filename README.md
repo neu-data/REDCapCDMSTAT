@@ -92,6 +92,45 @@ the values verified in the DRW; turn these off with
 DRW and locking rights per action, refuses to write if REDCap's schema is not
 what it expects, and logs every write to REDCap's project Logging.
 
+## Connect your REDCap project
+
+You need the project's **API URL** and an **API token**. Both are on the
+project's *API* page in REDCap; if the token isn't there, request one.
+Your REDCap user needs the **API Export** right. Give it the **Logging** right
+too if you want incremental sync, and **API Import** only if you'll use
+write-back, randomisation or the DRW module.
+
+**From R:**
+
+```r
+library(REDCapCDMSTAT)
+redcap_check("https://redcap.your-institution.org/api/", token = "<token>")   # read-only diagnosis
+nx <- cdmstat_setup("https://redcap.your-institution.org/api/")              # prompts for the token (hidden)
+```
+
+`cdmstat_setup()` re-runs the check and refuses to continue if anything
+fails. It stores the token in your user `.Renviron` (or the OS keyring, or
+this session only, depending on `store =`), saves the URL to
+`connection.json` in the data folder (without the token), and downloads the
+data. After that, `run_app()`, `run_api()` and the web app's `run.ps1` /
+`run.sh` connect to the project automatically.
+
+**From the Shiny app:** open the **Connection** tab, enter the URL and token,
+click *Test connection* (read-only), then *Save and connect*.
+
+`redcap_check()` explains failures in plain words:
+
+| Result | Meaning |
+|---|---|
+| Server could not be reached | Wrong URL, a VPN or firewall in the way, or API access blocked from this machine |
+| REDCap refused the token | Partial copy, a token from another project or server, or no API Export right |
+| No records readable | Empty project, or data-access-group or export rights restrict the user |
+| Logging export not allowed | Works, but every sync is a full download |
+| DRW External Module not installed | Optional. Needed only for REDCap-native queries and locking |
+
+To switch back to the demo or another project, run `cdmstat_disconnect()`.
+The cache and ledger are kept.
+
 ## 1. R package
 
 ```r
@@ -134,7 +173,7 @@ Every exported function and class has a help page (`?CDMSTAT`,
 `?cdmstat_connect`, `?table_one` and so on), and `R CMD check` passes with no
 errors, warnings or notes.
 
-Run the tests with `testthat::test_local("REDCapCDMSTAT")`: 179
+Run the tests with `testthat::test_local("REDCapCDMSTAT")`: 210
 expectations, including a mock REDCap Cloud server, the DRW sync and REDCap
 locking. Run the External Module's own tests with
 `php redcap-module/cdmstat_drw_v1.0.0/tests/run_tests.php` (44 checks).
@@ -195,7 +234,7 @@ This runs the installation checks, the full R test suite and the External
 Module tests, and traces each result to the user requirements in
 [validation/requirements.csv](validation/requirements.csv). It writes a
 signed-off-ready report to `validation/output/`. The latest run passed: 18/18
-IQ checks, 41/41 R tests, 44/44 module tests and 24/24 requirements.
+IQ checks, 46/46 R tests (210 expectations), 44/44 module tests and 25/25 requirements.
 Performance qualification on your own study follows
 [validation/PQ-protocol.md](validation/PQ-protocol.md).
 
@@ -209,7 +248,7 @@ backups, secrets and log redaction.
 
 | Variable | Meaning |
 |---|---|
-| `CDMSTAT_SOURCE` | `demo` (default), `redcap`, `cloud`, `odm` |
+| `CDMSTAT_SOURCE` | `redcap`, `cloud`, `odm` or `demo`. If unset, a connection saved by `cdmstat_setup()` is used, otherwise the demo |
 | `CDMSTAT_URL` | REDCap API URL, or REDCap Cloud base URL |
 | `CDMSTAT_TOKEN_ENV` | env var holding the token (`REDCAP_API_TOKEN` / `REDCAP_CLOUD_TOKEN`) |
 | `CDMSTAT_KEYRING_SERVICE` | read the token from the OS keyring instead |

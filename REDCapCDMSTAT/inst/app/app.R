@@ -233,6 +233,21 @@ ui <- page_navbar(
           nav_panel("SV", DTOutput("sd_sv")), nav_panel("DS", DTOutput("sd_ds"))))),
     nav_panel("Activity trail", card(card_header("All CDMS actions (append-only)"), DTOutput("act_tbl")))
   ),
+  nav_panel("Connection",
+    layout_columns(col_widths = c(5, 7),
+      card(card_header("Current data source"), uiOutput("cx_current")),
+      card(card_header("Connect a REDCap project"),
+        textInput("cx_url", "REDCap API URL", placeholder = "https://redcap.your-institution.org/api/"),
+        passwordInput("cx_token", "API token (from the project's API page)"),
+        radioButtons("cx_store", "Keep the token",
+                     c("In my user .Renviron file" = "renviron", "For this session only" = "session",
+                       "In the OS keyring (needs the keyring package)" = "keyring")),
+        div(actionButton("cx_test", "Test connection"),
+            actionButton("cx_save", "Save and connect", class = "btn-primary")),
+        helpText("Testing is read-only. Saving stores the URL in the project folder; the token is kept only where you choose above. Other users of this app pick up the new connection after a restart."),
+        tableOutput("cx_result"))
+    )
+  ),
   nav_spacer(),
   nav_item(textOutput("whoami", inline = TRUE)),
   nav_item(input_dark_mode(id = "mode"))
@@ -575,6 +590,38 @@ server <- function(input, output, session) {
     utils::zip(file, basename(f), flags = "-q")
   })
   output$act_tbl <- renderDT({ state(); dt(nx$activity(n = 1000)) })
+
+  # ---- Connection
+  output$cx_current <- renderUI({
+    state()
+    s <- nx$summary()
+    cfg <- cdmstat_connection(nx$dir)
+    tags$dl(tags$dt("Source"), tags$dd(s$source),
+            tags$dt("Project"), tags$dd(sprintf("%s (PID %s)", s$project, s$project_id)),
+            tags$dt("API URL"), tags$dd(cfg$url %||% (if (inherits(nx$backend, "RedcapBackend")) nx$backend$url else "-")),
+            tags$dt("Records / last sync"), tags$dd(sprintf("%s / %s", s$records, s$last_sync)),
+            tags$dt("Data folder"), tags$dd(code(nx$dir)))
+  })
+  cx_check <- reactiveVal(NULL)
+  observeEvent(input$cx_test, {
+    req(nzchar(input$cx_url), nzchar(input$cx_token))
+    cx_check(notify_err(redcap_check(input$cx_url, token = trimws(input$cx_token))))
+  })
+  output$cx_result <- renderTable({
+    r <- cx_check(); req(r)
+    data.frame(Result = r$result, Check = r$check, Detail = r$detail)
+  }, striped = TRUE, width = "100%")
+  observeEvent(input$cx_save, {
+    req(nzchar(input$cx_url), nzchar(input$cx_token))
+    new <- notify_err(withProgress(message = "Connecting and downloading data", {
+      cdmstat_setup(input$cx_url, token = trimws(input$cx_token), store = input$cx_store, actor = actor)
+    }))
+    if (is.null(new)) return()
+    nx <<- new
+    updateTextInput(session, "cx_token", value = "")
+    showNotification(sprintf("Connected to %s: %d records", new$info$project_title, new$summary()$records), duration = 8)
+    touch()
+  })
 
 }
 

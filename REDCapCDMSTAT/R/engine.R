@@ -68,8 +68,21 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
                     metadata_changed = md_changed)
       } else {
         begin <- format(self$last_sync - 120, "%Y-%m-%d %H:%M")
-        ch <- parse_log(self$backend$logging(begin))
+        lg <- tryCatch(self$backend$logging(begin), error = function(e) e)
         md_changed <- private$refresh_metadata()
+        if (inherits(lg, "error")) {
+          # No logging right for this token: fall back to a full download.
+          self$raw <- self$backend$records()
+          self$last_sync <- t0
+          private$typed <- NULL
+          private$save_cache()
+          private$after_change()
+          res <- list(mode = "full (no log access)", changed = length(unique(self$raw[[self$id_field()]])),
+                      deleted = 0L, metadata_changed = md_changed)
+          self$ledger$log_sync(res$mode, res$changed, 0L, md_changed, as.numeric(difftime(Sys.time(), t0, units = "secs")))
+          return(invisible(res))
+        }
+        ch <- parse_log(lg)
         if (md_changed && length(setdiff(field_columns(self$metadata), names(self$raw)))) {
           self$raw <- self$backend$records()
           ch$changed <- character()
@@ -541,6 +554,14 @@ cdmstat_from_env <- function() {
   url <- env("CDMSTAT_URL")
   source <- env("CDMSTAT_SOURCE", if (nzchar(url)) "redcap" else "demo")
   dir <- env("CDMSTAT_DIR")
+  # A connection saved by cdmstat_setup() is used when nothing else is configured.
+  if (!nzchar(url) && !nzchar(Sys.getenv("CDMSTAT_SOURCE"))) {
+    cfg <- cdmstat_connection(if (nzchar(dir)) dir else default_project_dir())
+    if (!is.null(cfg)) {
+      return(cdmstat_connect(cfg$url, token_env = cfg$token_env %||% "REDCAP_API_TOKEN",
+                             keyring_service = cfg$keyring_service, dir = if (nzchar(dir)) dir else default_project_dir()))
+    }
+  }
   with_dir <- function(args) { if (nzchar(dir)) args$dir <- dir; args }
   ks <- env("CDMSTAT_KEYRING_SERVICE")
   ks <- if (nzchar(ks)) ks else NULL
