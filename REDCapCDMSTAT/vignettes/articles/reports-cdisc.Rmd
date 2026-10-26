@@ -1,0 +1,80 @@
+---
+title: "Reports, CDISC and reproducibility"
+description: "Data cuts, the Quarto report, SDTM, define.xml, ODM and the replay script."
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+library(REDCapCDMSTAT)
+nx <- cdmstat_demo(dir = file.path(tempdir(), "reports"), reset = TRUE, actor = "dana")
+```
+
+## Data cuts
+
+A cut is an immutable snapshot of the data and dictionary. Its SHA-256 hash
+is recorded in the ledger, and it can be signed off:
+
+```{r}
+cut <- nx$freeze("Final analysis", "Database locked 2026-10-01")
+nx$sign_off(cut, "Database locked; all queries closed")
+nx$cuts()[, c("cut_id", "label", "n_records", "signed_off_by", "sha256")]
+```
+
+`nx$use_cut(cut, require_signoff = TRUE)` points every analysis method at the
+cut, verifying its hash first. A modified cut file is refused.
+
+## The Quarto report
+
+```r
+render_report(dir = nx$dir, cut_id = cut, require_signoff = TRUE)
+```
+
+The template (`inst/quarto/cdmstat-report.qmd`) contains:
+
+- cut provenance: hash, sign-off and dictionary hash
+- data quality at the time of the cut
+- Table 1 with the test rationale
+- longitudinal trend plots
+- a Cox model and an ANCOVA
+- the replay script
+
+It renders with the Quarto CLI if available, otherwise with rmarkdown (needs
+pandoc), otherwise with knitr and markdown. See the
+[sample report](https://github.com/neu-data/REDCapCDMSTAT/blob/main/examples/sample-report.html)
+in the repository.
+
+## CDISC SDTM, define.xml and ODM
+
+```{r}
+nx$code_terms("ae_term")
+sdtm <- nx$sdtm()
+sapply(sdtm, nrow)
+head(sdtm$DM[, c("USUBJID", "SITEID", "AGE", "SEX", "ARM")], 3)
+head(sdtm$VS[, c("USUBJID", "VSTESTCD", "VSORRES", "VSORRESU", "VISIT")], 3)
+head(sdtm$AE[, c("USUBJID", "AETERM", "AEDECOD", "AESEV", "AESER")], 3)
+```
+
+`nx$export_cdisc(dir)` writes each domain as CSV and SAS transport (`.xpt`).
+It adds a Define-XML 2.0 file (dataset and variable metadata) and the whole
+study as CDISC ODM 1.3:
+
+```{r}
+basename(nx$export_cdisc(file.path(tempdir(), "cdisc")))
+```
+
+The mapping from study fields to SDTM variables is guessed from common field
+names by `sdtm_default_map()`. For a real study, review it and pass your own
+with `nx$sdtm(map = )`. The define.xml file has no controlled-terminology
+code lists, so run a conformance checker such as Pinnacle 21 before a
+submission.
+
+## Replay script
+
+```{r}
+nx$table_one()
+nx$fit("sbp__week_24 ~ arm + sbp__baseline")
+cat(nx$script(), sep = "\n")
+```

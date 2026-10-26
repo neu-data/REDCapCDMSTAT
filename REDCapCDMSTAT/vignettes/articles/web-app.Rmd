@@ -1,0 +1,100 @@
+---
+title: "Web app, gateway and REST API"
+description: "Multi-user access with roles, live updates and the REDCap Data Entry Trigger."
+---
+
+The web app suits a team that works on one study at the same time. It has
+three layers:
+
+```
+browser ──HTTPS──> FastAPI gateway :8080 ──> R engine (plumber) 127.0.0.1:8000 ──> REDCap
+                    users and roles, WebSocket push, /det endpoint
+```
+
+The **R engine** listens on localhost only and accepts requests only when
+they carry the gateway's shared secret. The **gateway** authenticates each
+person with a personal API key, attaches their name and role to every
+request (for the audit trail), pushes changes to every open browser over a
+WebSocket, and receives REDCap's Data Entry Trigger. The **frontend** is
+plain JavaScript with no build step.
+
+## Run it
+
+```powershell
+pip install -r web/gateway/requirements.txt
+cd web; .\run.ps1          # Linux/macOS: ./run.sh
+```
+
+On first run, `data_manager` and `statistician` keys are printed once. Add
+people with:
+
+```bash
+python web/gateway/manage_users.py add <name> <dm|stats|monitor|pi|viewer>
+```
+
+<img src="../reference/figures/screenshots/web-login.png" class="screenshot" alt="Sign-in screen">
+
+## Roles
+
+| Role | Can |
+|---|---|
+| `dm` | queries, rules, cuts, randomisation set-up, locks, coding, deviations, write-back, DRW sync |
+| `stats` | read, raise analysis queries, comment |
+| `monitor` | read, raise queries, verify SDV, log deviations |
+| `pi` | read, randomise, e-sign (re-enters their key) |
+| `viewer` | read only |
+
+The roles separate duties deliberately: data managers cannot mark SDV, and
+only data managers see the randomisation allocations.
+
+## Screens
+
+<img src="../reference/figures/screenshots/web-dashboard.png" class="screenshot" alt="Dashboard">
+<img src="../reference/figures/screenshots/web-queries.png" class="screenshot" alt="Query board linked to the REDCap DRW">
+
+The query board is grouped by status. Each card shows its REDCap DRW thread
+number when DRW sync is on; clicking it opens the audit trail and the
+transition form.
+
+<img src="../reference/figures/screenshots/web-explore.png" class="screenshot" alt="Explore">
+<img src="../reference/figures/screenshots/web-stats.png" class="screenshot" alt="Statistics">
+<img src="../reference/figures/screenshots/web-sdv.png" class="screenshot" alt="SDV">
+<img src="../reference/figures/screenshots/web-sites.png" class="screenshot" alt="Site metrics">
+
+## REDCap Data Entry Trigger
+
+In REDCap, go to **Project Setup → Additional customizations → Data Entry
+Trigger** and enter:
+
+```
+https://<your-host>/det?token=<CDMSTAT_DET_TOKEN>
+```
+
+Each form save then re-exports that one record, re-runs the rules, and
+pushes the change to every open browser.
+
+## REST API
+
+The same functions are available directly. Through the gateway, the paths
+are prefixed with `/api/` and need `Authorization: Bearer <key>`.
+
+| Area | Endpoints |
+|---|---|
+| Project | `GET /summary`, `GET /metadata`, `POST /sync`, `POST /det`, `GET /sync/history`, `GET /schema/history` |
+| Data quality | `GET /issues`, `GET /rules`, `POST /rules` |
+| Queries | `GET /queries`, `POST /queries`, `POST /queries/raise-from-rules`, `POST /queries/{id}/transition`, `POST /queries/{id}/comment`, `GET /queries/{id}/audit`, `POST /writeback` |
+| REDCap DRW | `GET /drw/status`, `POST /drw/enable`, `POST /drw/sync`, `GET /drw/links` |
+| Analysis | `GET /fields/numeric`, `GET /scatter`, `GET /variables`, `GET /table1`, `GET /trend`, `POST /fit` |
+| Data cuts | `GET /cuts`, `POST /cuts`, `POST /cuts/{id}/signoff`, `GET /script` |
+| CDMS | `GET/POST /randomization...`, `GET /sdv`, `POST /sdv/plan`, `POST /sdv/verify`, `GET/POST /locks`, `POST /locks/{id}/unlock`, `GET /signatures`, `POST /esign`, `GET /coding`, `POST /coding/run`, `POST /coding/approve`, `GET/POST /deviations`, `POST /deviations/{id}/close`, `POST /deviations/check-windows` |
+| Oversight and export | `GET /metrics/sites`, `GET /metrics/enrollment`, `GET /sdtm/{domain}`, `GET /export/odm`, `GET /activity` |
+
+```bash
+curl -H "Authorization: Bearer $KEY" https://cdmstat.example.org/api/table1?event=baseline_arm_1
+curl -X POST -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+     -d '{"record_id":"55","event":"week_12_arm_1","field":"hba1c","message":"Please verify"}' \
+     https://cdmstat.example.org/api/queries
+```
+
+For production (HTTPS, services, secrets, backups), see
+[Validation and deployment](validation-deployment.html).

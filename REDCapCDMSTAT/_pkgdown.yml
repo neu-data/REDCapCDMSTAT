@@ -1,0 +1,173 @@
+url: https://neu-data.github.io/REDCapCDMSTAT/
+
+template:
+  bootstrap: 5
+  bslib:
+    # REDCap CDMSTAT system colours (sampled from the logo and the apps)
+    primary: "#A01621"
+    secondary: "#2C5D8F"
+    navbar-bg: "#323436"
+    link-color: "#2C5D8F"
+    headings-color: "#323436"
+    base_font: {google: "Source Sans 3"}
+    heading_font: {google: "Source Sans 3"}
+    code_font: {google: "JetBrains Mono"}
+
+navbar:
+  bg: dark
+  type: dark
+  structure:
+    left: [intro, guides, apps, redcap, reference, comparison, news]
+    right: [search, neudata, github]
+  components:
+    guides:
+      text: Guides
+      menu:
+        - text: End-to-end pipeline
+          href: articles/pipeline.html
+        - text: Data management (CDMS)
+          href: articles/data-management.html
+        - text: Statistical analysis
+          href: articles/statistics.html
+        - text: Reports, CDISC and reproducibility
+          href: articles/reports-cdisc.html
+        - text: Validation and deployment
+          href: articles/validation-deployment.html
+    apps:
+      text: Apps
+      menu:
+        - text: Shiny app
+          href: articles/shiny-app.html
+        - text: Web app, gateway and REST API
+          href: articles/web-app.html
+        - text: Portfolio dashboard
+          href: articles/shiny-app.html#portfolio-dashboard
+    redcap:
+      text: REDCap
+      menu:
+        - text: Connect your REDCap project
+          href: articles/connect-redcap.html
+        - text: Data Resolution Workflow module
+          href: articles/drw-module.html
+        - text: REDCap Cloud and CDISC ODM
+          href: articles/redcap-cloud-odm.html
+    comparison:
+      text: Comparison
+      href: articles/comparison.html
+    neudata:
+      icon: fa-globe
+      href: https://www.neu-data.com
+      aria-label: Neudata website
+    github:
+      icon: fa-github
+      href: https://github.com/neu-data/REDCapCDMSTAT
+      aria-label: GitHub repository
+
+footer:
+  structure:
+    left: neudata
+    right: built_with
+  components:
+    neudata: "Developed by [**Neudata Consulting Ltd**](https://www.neu-data.com) · *Insight. Impact. Innovation.*"
+
+home:
+  title: "REDCap CDMSTAT: clinical data management and statistics for REDCap"
+  description: >
+    One engine for data managers and biostatisticians on REDCap, REDCap Cloud
+    and CDISC ODM studies, with an R package, a Shiny app, a web app, a REST
+    API, a REDCap External Module and a Quarto report.
+  sidebar:
+    structure: [links, license, community, citation, authors, dev]
+  links:
+    - text: Sample analysis report
+      href: https://github.com/neu-data/REDCapCDMSTAT/blob/main/examples/sample-report.html
+    - text: REDCap External Module
+      href: https://github.com/neu-data/REDCapCDMSTAT/tree/main/redcap-module/cdmstat_drw_v1.0.0
+
+articles:
+  - title: Guides
+    navbar: ~
+    contents:
+      - REDCapCDMSTAT
+      - articles/pipeline
+      - articles/data-management
+      - articles/statistics
+      - articles/reports-cdisc
+      - articles/validation-deployment
+  - title: Apps
+    contents:
+      - articles/shiny-app
+      - articles/web-app
+  - title: REDCap integration
+    contents:
+      - articles/connect-redcap
+      - articles/drw-module
+      - articles/redcap-cloud-odm
+  - title: Positioning
+    contents:
+      - articles/comparison
+
+reference:
+  - title: Connect a project
+    desc: Open a study from REDCap, REDCap Cloud, a CDISC ODM file, a cache folder or the simulated demo.
+    contents:
+      - cdmstat_setup
+      - redcap_check
+      - cdmstat_connect
+      - cdmstat_cloud
+      - cdmstat_odm
+      - cdmstat_demo
+      - cdmstat_open
+      - cdmstat_from_env
+      - cdmstat_connection
+      - cdmstat_disconnect
+      - resolve_token
+  - title: The engine
+    desc: One object for sync, data quality, queries, CDMS modules, analysis and export. See the Methods section.
+    contents:
+      - CDMSTAT
+      - Ledger
+  - title: Backends
+    contents:
+      - RedcapBackend
+      - RedcapCloudBackend
+      - OdmBackend
+      - DemoBackend
+  - title: REDCap logic and data
+    contents:
+      - translate_logic
+      - eval_logic
+      - type_data
+      - parse_choices
+      - dict_hash
+      - dict_diff
+      - run_validation
+  - title: Analysis
+    contents:
+      - shape_data
+      - detect_arm
+      - baseline_vars
+      - table_one
+      - detect_outliers
+      - trend_summary
+      - fit_model
+  - title: Standards and exchange
+    contents:
+      - read_odm
+      - write_odm
+      - write_define
+      - sdtm_default_map
+      - demo_dictionary
+  - title: Apps, API and reports
+    contents:
+      - run_app
+      - run_api
+      - run_portfolio
+      - cdmstat_portfolio
+      - render_report
+  - title: Demo data
+    contents:
+      - demo_project
+  - title: Package
+    contents:
+      - REDCapCDMSTAT-package

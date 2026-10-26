@@ -1,0 +1,162 @@
+---
+title: "End-to-end pipeline"
+description: "From REDCap to a signed-off analysis, in one engine."
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 8, fig.height = 4.2, fig.align = "center")
+```
+
+<div class="pipeline-figure"><img src="../reference/figures/pipeline.svg" alt="REDCap CDMSTAT pipeline" width="100%"></div>
+
+This guide walks through the complete loop on the simulated trial. With a
+real project, only step 1 changes (see
+[Connect your REDCap project](connect-redcap.html)).
+
+| Step | Who | What happens |
+|---|---|---|
+| 1. Connect and sync | Data manager | Data and dictionary are pulled; later syncs fetch only changed records |
+| 2. Validate | Data manager | Rules from the live dictionary plus custom rules find problems |
+| 3. Query | Data manager, statistician | Problems and analysis outliers become queries, mirrored to REDCap |
+| 4. Resolve | Site staff | Values are corrected in REDCap; queries resolve on the next sync |
+| 5. Monitor and lock | Monitor, PI, data manager | SDV, coding, deviations, locks and e-signatures |
+| 6. Freeze | Data manager | A hashed data cut is frozen and signed off |
+| 7. Analyse | Statistician | Table 1, trends and models on the signed cut |
+| 8. Report and export | Statistician | Quarto report, SDTM, define.xml, ODM and a replayable script |
+
+## 1. Connect and sync
+
+```{r}
+library(REDCapCDMSTAT)
+nx <- cdmstat_demo(dir = file.path(tempdir(), "pipeline"), reset = TRUE, actor = "dana")
+nx$summary()[c("project", "source", "records", "rows", "fields", "events")]
+```
+
+`nx$sync()` is incremental: it reads the REDCap log since the last sync
+and re-exports only the records named there. The data dictionary is
+hashed on every sync, so a change made in the Online Designer is detected
+and logged.
+
+## 2. Validate
+
+```{r}
+issues <- nx$validate()
+table(sub(":.*", "", issues$rule))
+```
+
+A custom rule is REDCap logic that must be TRUE:
+
+```{r}
+nx$add_rule("weight_plausible", "[weight] < 180", "Weight above 180 kg: please verify", "warning")
+nrow(nx$validate())
+```
+
+## 3. Query
+
+```{r}
+nx$raise_queries()
+```
+
+A statistician spots an outlier and raises a query from the analysis, exactly
+as clicking a point on the Explore plot does in the apps:
+
+```{r}
+out <- nx$outliers("hba1c")
+out[out$outlier, ]
+nx$add_query("55", "hba1c", "HbA1c 19.5% looks implausible: check the lab report",
+             event = "week_12_arm_1", value = "19.5", source = "analysis", actor = "sam")
+table(nx$queries()$source)
+```
+
+With the [DRW External Module](drw-module.html) installed, `nx$drw_enable()`
+mirrors every query into REDCap's own Data Resolution Workflow pop-up, where
+site staff answer them.
+
+## 4. Resolve
+
+A site corrects the weight of record 7 in REDCap (simulated here). The next
+sync picks up just that record, and the rule query resolves itself:
+
+```{r}
+nx$backend$edit("7", "weight", "75.0", user = "site_coordinator")
+nx$sync()[c("mode", "changed")]
+nx$raise_queries()
+q <- nx$queries()
+q[q$record_id == "7" & q$field == "weight", c("message", "status")]
+```
+
+## 5. Monitor and lock
+
+```{r}
+nx$sdv_plan(critical_fields = c("arm", "event_occurred", "ae_serious"), first_n = 3, sample_rate = 0.2)
+sdv <- nx$sdv_status(required_only = TRUE)
+nx$sdv_verify(head(sdv$unit_key, 5), actor = "mona")
+nx$code_terms("ae_term")
+nx$check_visit_windows(window = 7)
+lk <- nx$lock("10", "Interim database lock")
+nx$site_metrics()[, c("site", "subjects", "open_queries", "sdv_verified_pct", "deviations")]
+```
+
+See [Data management](data-management.html) for each module in detail.
+
+## 6. Freeze
+
+```{r}
+cut <- nx$freeze("Interim analysis 1", "Data reviewed by DM")
+nx$sign_off(cut, "Data reviewed and clean for the interim analysis")
+nx$use_cut(cut, require_signoff = TRUE)
+nx$active_cut()[c("id", "label", "sha256")]
+```
+
+Every analysis below runs on this cut. If the file is altered, loading it
+fails the hash check.
+
+## 7. Analyse
+
+```{r}
+t1 <- nx$table_one()
+t1[t1$level %in% c("mean (SD)", "median [IQR]"), c("label", "level", "Drug A", "Placebo", "p_value", "test")]
+```
+
+```{r trend}
+tr <- nx$trend("sbp")
+ev <- levels(tr$event)
+plot(NA, xlim = c(0.8, length(ev) + 0.2), ylim = range(c(tr$lower, tr$upper)), xaxt = "n",
+     xlab = "", ylab = "Mean systolic BP, mmHg (95% CI)", las = 1, bty = "l")
+axis(1, seq_along(ev), sub("_arm_1$", "", ev))
+cols <- c("Drug A" = "#A01621", "Placebo" = "#2C5D8F")
+for (g in names(cols)) {
+  s <- tr[tr$group == g, ]
+  x <- as.integer(s$event) + ifelse(g == "Drug A", -0.04, 0.04)
+  arrows(x, s$lower, x, s$upper, angle = 90, code = 3, length = 0.04, col = cols[g])
+  lines(x, s$mean, type = "b", pch = 19, lwd = 2, col = cols[g])
+}
+legend("bottomleft", names(cols), col = cols, lwd = 2, pch = 19, bty = "n")
+```
+
+A mixed model for the repeated blood-pressure measurements:
+
+```{r}
+mm <- nx$fit("sbp ~ arm * redcap_event_name + (1 | record_id)", "mixed")
+mm[, c("term", "estimate", "conf_low", "conf_high", "p_value")]
+```
+
+And a Cox model for the primary endpoint:
+
+```{r}
+nx$fit("Surv(followup_days, event_occurred == 'Yes') ~ arm + age", "cox")[, c("term", "hazard_ratio", "ratio_low", "ratio_high", "p_value")]
+```
+
+## 8. Report and export
+
+```{r}
+files <- nx$export_cdisc(file.path(tempdir(), "pipeline-cdisc"))
+basename(files)
+```
+
+`render_report(nx$dir, cut, require_signoff = TRUE)` renders the Quarto
+report for the cut. And the script replays everything analytic:
+
+```{r}
+cat(head(strsplit(nx$script(), "\n")[[1]], 14), sep = "\n")
+```

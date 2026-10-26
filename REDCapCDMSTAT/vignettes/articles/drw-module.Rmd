@@ -1,0 +1,95 @@
+---
+title: "Data Resolution Workflow External Module"
+description: "REDCap-native queries, form locks and verification over the REDCap API."
+---
+
+REDCap's **Data Resolution Workflow (DRW)** is the query pop-up next to every
+field, and site staff already know it. The standard REDCap API cannot read
+or write it. The **CDMSTAT DRW API** External Module
+(`redcap-module/cdmstat_drw_v1.0.0` in the repository) adds Module API
+actions for it, so the CDMSTAT ledger and the DRW stay in step.
+
+## What you get
+
+- **Queries:** CDMSTAT queries appear in the DRW pop-up and on the resolve
+  dashboard, with the CDMSTAT user's name. Replies, closures and reopenings
+  made in REDCap flow back, credited to `redcap:<username>`. Queries opened
+  directly in REDCap are imported.
+- **Locks:** `nx$lock()` locks the forms inside REDCap, so REDCap itself
+  refuses edits.
+- **Verification:** `nx$sdv_verify()` marks the values verified in the DRW.
+
+## Install
+
+1. Copy `cdmstat_drw_v1.0.0` into `<redcap>/modules/`.
+2. Enable it in **Control Center → External Modules**, then in the project.
+3. Enable the DRW in the project: **Project Setup → Additional customizations**.
+4. Give the API user DRW **Open, close and respond to queries** and, for locking, **Record Locking**.
+5. Check it:
+
+   ```bash
+   curl -F token=$TOKEN -F content=externalModule -F prefix=cdmstat_drw -F action=drw-status -F returnFormat=json https://<redcap>/api/
+   ```
+
+6. In R:
+
+   ```r
+   nx$drw_enable()                     # verifies module, DRW and rights
+   nx$drw_sync()                       # also runs after every nx$sync()
+   nx$drw_enable(lock_in_edc = FALSE, verify_sdv = FALSE)   # queries only
+   ```
+
+The module needs a REDCap version whose External Module framework supports
+Module API actions (REDCap 14 and later; it declares framework version 15).
+
+## Status mapping
+
+| CDMSTAT | REDCap DRW |
+|---|---|
+| open | OPEN, response requested |
+| answered | OPEN with a response |
+| resolved / closed | CLOSED |
+| reopened | OPEN, response requested again |
+
+Each linked query remembers the last DRW resolution it has seen, so nothing
+is applied twice and CDMSTAT's own writes are not echoed back.
+
+## Module API actions
+
+| Action | Parameters | DRW right |
+|---|---|---|
+| `drw-status` | none | any |
+| `list-queries` | `since_res_id`, `record` | view |
+| `open-query` | `record`, `field`, `comment`, plus optional `event`, `instance`, `repeat_instrument`, `assign_to`, `actor` | open |
+| `respond` | `status_id`, `comment`, plus optional `response` | respond |
+| `close-query` | `status_id`, `comment` | open, close and respond |
+| `reopen-query` | `status_id`, `comment` | open |
+| `add-comment` | `status_id`, `comment` | respond |
+| `verify-field` / `deverify-field` | `record`, `field`, plus optional `event`, `instance`, `comment` | open, close and respond |
+| `lock-form` / `unlock-form` | `record`, `form`, plus optional `event`, `instance`, `reason` | Record Locking |
+| `list-locks` | `record` | any |
+
+## Safety
+
+- **Schema guard.** REDCap does not publish its DRW and locking table
+  layouts. Before every write the module checks the tables have the columns
+  it expects; if a REDCap upgrade changed them, it refuses to write (HTTP
+  501).
+- **Rights.** Every action is checked against the token user's rights; a
+  role assignment takes precedence over individual rights.
+- **Transactions.** Writes run in transactions, and record, field, form and
+  event are validated first.
+- **Audit.** Every write is recorded in REDCap's project Logging and API log.
+- **E-signatures stay in CDMSTAT.** They are not written into REDCap, because
+  REDCap's own e-signature needs the signer's REDCap password.
+
+## Tests
+
+```bash
+php redcap-module/cdmstat_drw_v1.0.0/tests/run_tests.php
+```
+
+The 44 checks run against a stand-in framework and SQLite copies of the
+tables, not a live REDCap. Install the module on a development copy of your
+REDCap first, and confirm in the DRW pop-up that threads and locks display
+correctly.

@@ -129,7 +129,7 @@ ui <- page_navbar(
         selectInput("tr_field", "Outcome", NULL), plotlyOutput("tr_plot", height = 420), DTOutput("tr_tbl")),
       nav_panel("Model builder",
         layout_columns(col_widths = c(6, 3, 3),
-          textInput("m_formula", "Formula (wide + collapsed data)", "sbp__week_24 ~ arm + sbp__baseline + age"),
+          textInput("m_formula", "Formula", "sbp__week_24 ~ arm + sbp__baseline + age"),
           selectInput("m_type", "Model", c("linear", "logistic", "cox", "mixed", "mixed_logistic")),
           actionButton("m_run", "Fit", class = "btn-primary mt-4")),
         helpText("Cox: Surv(followup_days, event_occurred == 'Yes') ~ arm + age. Logistic: any_ae_serious ~ arm. Mixed (repeated measures on long data): sbp ~ arm * redcap_event_name + (1 | record_id)."),

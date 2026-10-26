@@ -15,6 +15,8 @@ Description: A single engine that closes the loop between clinical data
     reproducible R script. A 'shiny' app, a 'plumber' API and a 'Quarto'
     report template are shipped on top of the same engine.
 License: MIT + file LICENSE
+URL: https://neu-data.github.io/REDCapCDMSTAT/, https://github.com/neu-data/REDCapCDMSTAT
+BugReports: https://github.com/neu-data/REDCapCDMSTAT/issues
 Encoding: UTF-8
 Depends: R (>= 4.1.0)
 Imports:
@@ -47,6 +49,8 @@ Suggests:
     httpuv,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+Config/Needs/website: pkgdown
+VignetteBuilder: knitr
 Roxygen: list(markdown = TRUE, r6 = FALSE)
 Collate:
     'REDCapCDMSTAT-package.R'

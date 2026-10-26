@@ -2,6 +2,26 @@
 
 # REDCap CDMSTAT
 
+[![R-CMD-check](https://github.com/neu-data/REDCapCDMSTAT/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/neu-data/REDCapCDMSTAT/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/neu-data/REDCapCDMSTAT/actions/workflows/pkgdown.yaml/badge.svg)](https://neu-data.github.io/REDCapCDMSTAT/)
+[![module-and-gateway](https://github.com/neu-data/REDCapCDMSTAT/actions/workflows/module-and-gateway.yaml/badge.svg)](https://github.com/neu-data/REDCapCDMSTAT/actions/workflows/module-and-gateway.yaml)
+![Neudata](https://img.shields.io/badge/Neudata-Consulting-323436?style=flat)
+
+**Documentation website: <https://neu-data.github.io/REDCapCDMSTAT/>**,
+covering getting started, the end-to-end pipeline, data management,
+statistics, the Shiny and web apps, REDCap integration, a capability
+comparison with existing tools, and the function reference.
+
+| Folder | Contents |
+|---|---|
+| [`REDCapCDMSTAT/`](REDCapCDMSTAT) | The R package, with the Shiny app, plumber API and Quarto report under `inst/` |
+| [`web/`](web) | FastAPI gateway and web frontend |
+| [`redcap-module/`](redcap-module/cdmstat_drw_v1.0.0) | REDCap External Module for the Data Resolution Workflow and form locks |
+| [`validation/`](validation) | IQ/OQ runner, requirements traceability, PQ protocol |
+| [`deploy/`](deploy) | HTTPS reverse-proxy configs, service units, security checklist |
+| [`assets/`](assets) | Logo artwork |
+| [`examples/`](examples) | Sample analysis report |
+
 Clinical data management (CDM) **and** statistical analysis (STAT) on one
 engine, for studies in **REDCap**, **REDCap Cloud** or any EDC that exports
 **CDISC ODM**. It is delivered four ways: an R package, a Shiny app, a
@@ -134,7 +154,7 @@ The cache and ledger are kept.
 ## 1. R package
 
 ```r
-install.packages("REDCapCDMSTAT", repos = NULL, type = "source")   # from this folder
+pak::pak("neu-data/REDCapCDMSTAT/REDCapCDMSTAT")   # or R CMD INSTALL REDCapCDMSTAT from a clone
 library(REDCapCDMSTAT)
 
 nx <- cdmstat_demo()                                   # simulated trial

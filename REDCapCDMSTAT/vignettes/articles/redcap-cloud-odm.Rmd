@@ -1,0 +1,84 @@
+---
+title: "REDCap Cloud and CDISC ODM"
+description: "Studies from REDCap Cloud or any EDC that exports CDISC ODM."
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+The engine does not depend on REDCap: anything that produces **CDISC ODM
+1.3** works. That covers REDCap Cloud (nPhase), OpenClinica, Medidata Rave,
+Castor and REDCap itself.
+
+## Any EDC: an ODM file
+
+```{r}
+library(REDCapCDMSTAT)
+demo <- cdmstat_demo(dir = file.path(tempdir(), "odm-src"), reset = TRUE)
+f <- file.path(tempdir(), "study.odm.xml")
+write_odm(demo$backend$state(), f)                 # stand-in for your EDC's export
+
+nx <- cdmstat_odm(f, dir = file.path(tempdir(), "odm-study"))
+nx$summary()[c("source", "records", "fields", "events")]
+head(nx$validate()[, c("rule", "record_id", "value")], 4)
+```
+
+When you replace the file with a newer export, `nx$sync()` updates only the
+subjects whose data changed. Subjects are compared by hash, because ODM
+snapshots carry no change log:
+
+```{r}
+x <- readLines(f)
+x[grep('I.weight" Value="450"', x)] <- sub("450", "81.0", x[grep('I.weight" Value="450"', x)])
+writeLines(x, f)
+nx$sync()[c("mode", "changed")]
+```
+
+How ODM maps to the engine:
+
+| ODM | Engine |
+|---|---|
+| `StudyEventDef` | events (with `DayOffset` for visit windows) |
+| `FormDef` with `Repeating="Yes"` | repeating instruments |
+| `ItemDef` `DataType` | number, integer and date validation |
+| `CodeList` | radio choices |
+| `RangeCheck` | validation min / max |
+| `Mandatory="Yes"` | required field |
+| `SubjectKey` | record ID |
+
+REDCap's own `redcap:` ODM attributes (field type, branching logic,
+calculations) are honoured, so a REDCap → ODM → CDMSTAT round trip is
+lossless.
+
+## REDCap Cloud over its REST API
+
+REDCap Cloud documents its REST API inside each customer account, not
+publicly. That's why the endpoint paths and the authentication header are
+settings:
+
+```r
+Sys.setenv(REDCAP_CLOUD_TOKEN = "...")      # or keyring_service =
+nx <- cdmstat_cloud(
+  base_url    = "https://<your-instance>.redcapcloud.com",
+  study       = "TRIAL-7",
+  export_path = "<ODM export path from your REDCap Cloud API documentation>",  # {study} is substituted
+  import_path = NULL,                       # set it to enable write-back
+  auth_header = "Authorization", auth_prefix = "Bearer "
+)
+```
+
+The connector is tested against a mock server that enforces the token and
+the path. Confirm the real paths in your REDCap Cloud documentation before
+relying on it.
+
+## Which features work where
+
+| Feature | REDCap | REDCap Cloud / ODM |
+|---|---|---|
+| Sync, validation, queries, statistics, cuts, CDISC export | yes | yes |
+| Incremental sync | from the REDCap log | by subject hash |
+| Data Entry Trigger | yes | no |
+| Queries in the EDC's own query system | with the DRW module | no (kept in CDMSTAT) |
+| Form locks enforced in the EDC | with the DRW module | no (changes after a lock are flagged) |
+| Write-back | API import | ODM import, if `import_path` is set |

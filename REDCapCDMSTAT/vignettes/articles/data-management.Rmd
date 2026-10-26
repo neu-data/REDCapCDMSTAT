@@ -1,0 +1,135 @@
+---
+title: "Data management (CDMS)"
+description: "Validation, queries, randomisation, SDV, locking, e-signatures, coding, deviations and site metrics."
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r}
+library(REDCapCDMSTAT)
+nx <- cdmstat_demo(dir = file.path(tempdir(), "dm"), reset = TRUE, actor = "dana")
+```
+
+All state lives in one SQLite **ledger** next to the cache, so the R
+package, the Shiny app, the web app and reports all see the same queries,
+locks and signatures. Every action is recorded in an append-only activity
+trail (`nx$activity()`).
+
+## Validation rules
+
+Four rule families come from the data dictionary itself, so they follow the
+dictionary when it changes:
+
+| Rule | Finds |
+|---|---|
+| `range:` | values outside the field's validation min/max (numbers and dates) |
+| `required:` | required fields left empty on a form that has data |
+| `branching:` | values recorded in a field that branching logic hides |
+| `calc:` | stored calculated fields that differ from a recalculation |
+
+```{r}
+nx$validate()[, c("rule", "record_id", "event", "value", "message")]
+```
+
+Custom rules use REDCap logic syntax, including cross-event references such
+as `[baseline_arm_1][weight]`:
+
+```{r}
+nx$add_rule("weight_change", "abs([weight] - [baseline_arm_1][weight]) < 15",
+            "Weight changed by 15 kg or more since baseline", "warning", field = "weight")
+nx$validate()[startsWith(nx$validate()$rule, "custom:weight"), c("record_id", "event", "value")]
+```
+
+## Queries
+
+```{r}
+nx$raise_queries()
+q <- nx$queries()
+id <- q$query_id[q$record_id == "15"]
+nx$transition_query(id, "answered", "Site: transcription error, correct value is 130", actor = "site_crc")
+nx$transition_query(id, "resolved", "Verified against the source document", actor = "dana")
+nx$query_audit(id)[, c("action", "actor", "old_status", "new_status", "comment")]
+```
+
+Transitions follow `open → answered → resolved → closed`, with reopening
+allowed, and each needs a reason. With the
+[DRW External Module](drw-module.html), queries also appear in REDCap's Data
+Resolution Workflow, and site replies made there flow back.
+
+## Randomisation
+
+A stratified, permuted-block schedule is generated once and concealed.
+Each subject gets exactly one allocation, and the arm is written to the EDC:
+
+```{r}
+nx$setup_randomization(strata = c("site", "sex"), block_sizes = c(4, 6), per_stratum = 60, seed = 2026)
+nx$backend$add_record("121", list(consent_date = "2025-12-02", dob = "1984-06-01", sex = "2", site = "3",
+                                  enrollment_complete = "2"))
+nx$sync()
+str(nx$randomize("121", actor = "peter")[c("record_id", "stratum", "seq", "arm_label", "written_to_edc")])
+try(nx$randomize("121"))
+```
+
+## Source data verification (SDV)
+
+A risk-based plan verifies forms with critical fields at 100%, plus the first
+*N* subjects at each site and a random sample of the rest. When a verified
+form is edited, it goes back to *reverify*:
+
+```{r}
+s <- nx$sdv_plan(critical_fields = c("arm", "event_occurred", "ae_serious"), first_n = 2, sample_rate = 0.1)
+table(required = s$required)
+k <- "1|baseline_arm_1|vitals|"
+nx$sdv_verify(k, actor = "mona")
+nx$backend$edit("1", "sbp", "101")
+nx$sync()
+nx$sdv_status()[nx$sdv_status()$unit_key == k, c("unit_key", "status", "verified_by")]
+```
+
+## Locks and electronic signatures
+
+```{r}
+lk <- nx$lock("10", "Interim database lock")
+sig <- nx$esign("10", "I approve the data of this record as Principal Investigator",
+                actor = "peter", identity_verified = TRUE)
+nx$backend$edit("10", "weight", "70.1")
+nx$sync()
+nx$locks()[, c("record_id", "reason", "integrity")]
+nx$signatures()[, c("record_id", "signer", "status")]
+```
+
+A signature binds the signer, its meaning and a hash of the record's data. In
+the web app the signer must re-enter their key, and the gateway checks it
+before signing. With the External Module, `lock()` also locks the forms
+inside REDCap, so REDCap itself refuses edits.
+
+## Medical coding
+
+```{r}
+nx$code_terms("ae_term")
+cd <- nx$coding()
+cd[!duplicated(cd$verbatim), c("verbatim", "status", "term", "suggestion_term", "score")]
+```
+
+Exact and synonym matches are auto-coded, and near misses wait for a coder
+(`nx$approve_coding()`). The bundled dictionary is a demo with fictitious
+codes; load your licensed MedDRA or WHODrug export with
+`nx$load_dictionary("meddra_llt.csv")`.
+
+## Protocol deviations
+
+```{r}
+nx$check_visit_windows(window = 7)
+nx$deviations()[, c("record_id", "event", "category", "description", "severity")]
+```
+
+## Site metrics
+
+```{r}
+nx$site_metrics()[, c("site", "subjects", "open_queries", "rule_violations", "sdv_required", "sdv_verified_pct", "deviations")]
+```
+
+For several studies at once, `cdmstat_portfolio()` and `run_portfolio()`
+summarise each study and their sites side by side.

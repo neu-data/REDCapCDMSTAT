@@ -1,0 +1,106 @@
+---
+title: "Capability comparison"
+description: "How REDCapCDMSTAT relates to existing REDCap tools and packages."
+---
+
+REDCapCDMSTAT is not a replacement for the established REDCap packages. It
+builds on their ideas and closes the **last mile** between them: data
+management and statistics on one audited ledger, with the loop back into
+REDCap.
+
+The table compares documented capabilities as of October 2026, based on
+each project's CRAN or GitHub documentation and REDCap's own feature set:
+
+- **Yes:** the capability is a documented feature.
+- **Partial:** a narrower form, or it needs your own code.
+- **—:** not a documented feature.
+- **See vendor:** REDCap Cloud's public material does not say; ask nPhase.
+
+Corrections are welcome as
+[issues](https://github.com/neu-data/REDCapCDMSTAT/issues).
+
+## The tools compared
+
+| Tool | Type | Focus |
+|---|---|---|
+| **REDCap (built in)** | Web EDC | Data capture plus Data Quality rules, Data Resolution Workflow, randomisation module, locking and e-signatures |
+| **redcapAPI** | R, CRAN | API interface, typed exports and casting, validation of exported values, offline connections |
+| **REDCapR** | R, CRAN | API calls in batches, reading and writing, longitudinal and repeating structures |
+| **REDCapTidieR** | R, CRAN | Tidy tables from projects with events and repeating instruments |
+| **tidyREDCap** | R, CRAN | Helpers: checkbox ("choose all") tables, labels, importing instruments |
+| **REDCapDM** | R, CRAN | Data management: transformation, query reports, query follow-up |
+| **REDCapSync** | R, CRAN | R6 project object, log-based sync of changed records, cached datasets |
+| **RosyREDCap** | R, GitHub | Shiny exploration of several projects, built on REDCapSync |
+| **REDCap Cloud** | Commercial SaaS EDC/CDMS | Hosted EDC with randomisation, coding, ePRO/eConsent, 21 CFR Part 11 |
+| **REDCapCDMSTAT** | R package + apps + REDCap module | Data management and statistics on one engine, two-way with REDCap |
+
+## Data access and structure
+
+| Capability | REDCap (built in) | redcapAPI | REDCapR | REDCapTidieR | tidyREDCap | REDCapDM | REDCapSync | REDCapCDMSTAT |
+|---|---|---|---|---|---|---|---|---|
+| Export and import through the API | — | Yes | Yes | Export | Export | Export | Yes | Yes |
+| Typed, analysis-ready data from the dictionary | — | Yes | Partial | Yes | Partial | Yes | Partial | Yes |
+| Longitudinal and repeating data reshaped | — | Partial | Partial | Yes | Partial | Partial | Partial | Yes (long / wide / collapse) |
+| Incremental sync from the REDCap log | — | — | — | — | — | — | Yes | Yes |
+| Near-real-time update on form save (Data Entry Trigger) | — | — | — | — | — | — | — | Yes |
+| Data dictionary drift detected and diffed | — | — | — | — | — | — | — | Yes |
+| Branching logic and calculations evaluated in R | Yes (in REDCap) | — | — | — | — | Yes (converted once) | — | Yes (recompiled from the live dictionary) |
+| Studies from other EDCs (CDISC ODM import) | — | — | — | — | — | — | — | Yes |
+| Token kept out of code (env, keyring) | n/a | Yes (with rccola) | Partial | Partial | Partial | Partial | Partial | Yes, with a connection check |
+
+## Data management
+
+| Capability | REDCap (built in) | redcapAPI | REDCapDM | REDCapSync / RosyREDCap | REDCap Cloud | REDCapCDMSTAT |
+|---|---|---|---|---|---|---|
+| Rule-based data quality checks | Yes (Data Quality module) | Partial | Yes | — | Yes | Yes (dictionary rules + custom REDCap logic) |
+| Query lifecycle with audit trail | Yes (DRW) | — | Partial (follow-up reports) | — | Yes | Yes |
+| Queries auto-resolve when data are fixed | — | — | Partial | — | — | Yes |
+| Outlier on a plot becomes a query | — | — | — | — | — | Yes |
+| Two-way sync with REDCap's DRW | n/a | — | — | — | n/a | Yes (External Module) |
+| Randomisation | Yes (module) | — | — | — | Yes | Yes (stratified blocks, written back) |
+| Risk-based SDV plan and re-verification | Partial (DRW verify) | — | — | — | See vendor | Yes |
+| Locking and e-signatures | Yes | — | — | — | Yes | Yes (hash-bound; locks enforced in REDCap via the module) |
+| Medical coding (MedDRA / WHODrug) | — | — | — | — | Yes | Yes (bring your licensed dictionary) |
+| Protocol deviations and visit windows | — | — | — | — | See vendor | Yes |
+| Site and multi-study oversight | Partial | — | — | Yes (RosyREDCap) | Yes | Yes |
+| Role-based web access for a team | Yes | — | — | — | Yes | Yes (dm / stats / monitor / pi / viewer) |
+
+## Statistics, reproducibility and standards
+
+| Capability | REDCap (built in) | REDCapTidieR | REDCapDM | REDCap Cloud | REDCapCDMSTAT |
+|---|---|---|---|---|---|
+| Baseline table (Table 1) from metadata | Partial (Stats & Charts) | — | — | See vendor | Yes, arm detected |
+| Test choice from the data, or enforced from the SAP | — | — | — | — | Yes |
+| Trends, linear, logistic, Cox and mixed models | — | — | — | See vendor | Yes |
+| Analysis on hashed, signed-off data cuts | — | — | — | See vendor | Yes |
+| Point-and-click session replayed as an R script | — | — | — | — | Yes |
+| Reproducible report from a data cut | — | — | — | See vendor | Yes (Quarto) |
+| CDISC ODM export | Yes | — | — | See vendor | Yes |
+| SDTM domains and define.xml | — | — | — | See vendor | Yes (DM, VS, LB, AE, SV, DS) |
+| Validation pack (IQ/OQ runner, traceability) | Institutional | — | — | Yes (vendor) | Yes |
+
+## When to use what
+
+- **Quick API scripts, batch exports or imports:** use **REDCapR** or
+  **redcapAPI**.
+- **Tidy tables for an analysis script:** use **REDCapTidieR** or
+  **tidyREDCap**.
+- **A cached project object for your own pipelines:** use **REDCapSync**.
+  **RosyREDCap** explores several projects.
+- **Data-management reports on exported data:** use **REDCapDM**.
+- **A fully hosted, vendor-validated commercial EDC/CDMS with ePRO and
+  eConsent:** use **REDCap Cloud**.
+- **One audited workspace where data managers and statisticians share
+  queries, cuts, models and reports, with the loop back into REDCap:** use
+  **REDCapCDMSTAT**.
+
+## What REDCapCDMSTAT does not do
+
+- **Participant-facing capture:** no eConsent, ePRO/eCOA or eRecruitment.
+  REDCap's surveys and eConsent framework cover these, and their data flow
+  in like any form.
+- **Native e-signatures:** it does not write e-signatures into REDCap,
+  because REDCap's need the signer's REDCap password.
+- **Licensed dictionaries:** it does not bundle MedDRA or WHODrug.
+- **Live testing:** it has not yet been run against a live REDCap server.
+  Run the PQ protocol on a development copy first.

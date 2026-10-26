@@ -1,0 +1,107 @@
+---
+title: "Connect your REDCap project"
+description: "Check, set up and use a live REDCap project."
+---
+
+You need two things from the project's **API** page in REDCap: the **API
+URL** and an **API token**. Request a token there if you don't have one.
+
+## REDCap user rights
+
+| Right | Needed for |
+|---|---|
+| **API Export** | everything (required) |
+| Data export access to the forms | reading those forms |
+| **Logging** | incremental sync (otherwise each sync is a full download) |
+| **API Import** | write-back, randomisation arm write-back, DRW module |
+| Data Resolution Workflow: *Open, close and respond* | the [DRW module](drw-module.html) |
+| Record Locking | locking forms in REDCap through the module |
+
+A dedicated service account is best: it keeps one person's leave or role
+change from breaking the connection.
+
+## 1. Check the connection
+
+The check is read-only:
+
+```r
+library(REDCapCDMSTAT)
+redcap_check("https://redcap.your-institution.org/api/", token = "<your token>")
+```
+
+```
+REDCap connection check: https://redcap.your-institution.org/api/
+
+  PASS  API URL                            https://redcap.your-institution.org/api/
+  PASS  Token format                       32 hexadecimal characters
+  PASS  Server and token                   REDCap 14.5.2
+  INFO  Project                            PID 1234: My trial (Development, longitudinal, repeating instruments)
+  PASS  Data dictionary                    86 fields on 9 forms
+  PASS  Record export                      412 records readable
+  PASS  Logging export (incremental sync)  Allowed: syncs download only changed records
+  INFO  CDMSTAT DRW External Module        Not installed or not enabled in this project (optional ...)
+  INFO  Write-back                         Needs the API Import right; ...
+
+Connection works.
+```
+
+| Result | What to do |
+|---|---|
+| *The server could not be reached* | Check the URL, VPN and firewall, and whether API access is allowed from this machine |
+| *REDCap refused the token* | Copy the whole token; check it belongs to this project and server, and that the user has API Export |
+| *No records readable* | The project is empty, or data access groups or export rights restrict the user |
+| *Logging export not allowed* | Grant the Logging right, or accept full downloads |
+| *Production project* | Test write-back, DRW sync and locking on a copy first |
+
+## 2. Set it up
+
+```r
+nx <- cdmstat_setup("https://redcap.your-institution.org/api/")   # prompts for the token (hidden)
+```
+
+`cdmstat_setup()`:
+
+1. **Re-runs the check** and stops if anything fails.
+2. **Stores the token where you choose** (`store =`): your user `.Renviron`
+   (`"renviron"`, the default), the OS keyring (`"keyring"`, needs the
+   keyring package), or this R session only (`"session"`).
+3. **Saves the connection**: the URL goes in `connection.json` in the data
+   folder. The token is never written there, nor to the cache, ledger or
+   generated scripts.
+4. **Downloads the data** and returns the engine.
+
+After setup, `run_app()`, `run_api()` and the web app connect to the project
+automatically. You can do the same from the Shiny app's **Connection** tab:
+
+<img src="../reference/figures/screenshots/shiny-connection.png" class="screenshot" alt="Connection tab">
+
+## 3. Day-to-day
+
+```r
+nx <- cdmstat_from_env()    # or just run_app()
+nx$sync()                   # incremental
+nx$validate(); nx$raise_queries()
+```
+
+For near-real-time updates, point REDCap's **Data Entry Trigger** at the web
+gateway (see [Web app](web-app.html#redcap-data-entry-trigger)).
+
+## Other ways to connect
+
+```r
+# Explicit, e.g. in a scheduled script: token from an environment variable or keyring
+nx <- cdmstat_connect("https://redcap.your-institution.org/api/", token_env = "REDCAP_API_TOKEN")
+nx <- cdmstat_connect("https://redcap.your-institution.org/api/", keyring_service = "redcap_pid_1234")
+
+# Environment variables for servers (see deploy/cdmstat.env.example)
+# CDMSTAT_SOURCE=redcap  CDMSTAT_URL=...  CDMSTAT_TOKEN_ENV=REDCAP_API_TOKEN  CDMSTAT_DIR=/var/lib/cdmstat/project
+
+cdmstat_disconnect()        # forget the saved connection (cache and ledger are kept)
+```
+
+## Security notes
+
+- **Keep the token out of shared places.** Never put it in code, chat or
+  email. If it has been exposed, regenerate it on the project's API page.
+- **The cache holds identifiable data.** Keep the data folder on encrypted
+  storage with access limited to the people who need it.

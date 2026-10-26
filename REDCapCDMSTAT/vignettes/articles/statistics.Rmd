@@ -1,0 +1,115 @@
+---
+title: "Statistical analysis"
+description: "Wrangling, Table 1 with guarded tests, outliers, trends and models."
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 8, fig.height = 4, fig.align = "center")
+```
+
+```{r}
+library(REDCapCDMSTAT)
+nx <- cdmstat_demo(dir = file.path(tempdir(), "stats"), reset = TRUE, actor = "sam")
+```
+
+## Wrangling longitudinal and repeating data
+
+One call chooses how events and repeating instruments are laid out, and the
+variable list shows what that choice makes available:
+
+```{r}
+long <- nx$shape("long", "drop")
+wide <- nx$shape("wide", "collapse")
+c(long = nrow(long), wide = nrow(wide))
+v <- attr(wide, "variables")
+head(v[v$type != "id", c("name", "type", "event", "label")], 12)
+grep("^(n_|any_|max_)", names(wide), value = TRUE)
+```
+
+| `longitudinal` | `repeating` | Result |
+|---|---|---|
+| `"long"` | `"drop"` | one row per subject and visit; repeating forms removed |
+| `"wide"` | `"collapse"` | one row per subject; visit-varying fields become `field__event`; repeating forms summarised (`n_`, `any_`, `max_`) |
+| either | `"only"` | the repeating-instrument rows themselves |
+
+## Table 1 with guarded test selection
+
+The arm is detected from the dictionary (a radio or dropdown field named
+like `arm` or labelled "randomised"). The baseline variables are the
+analysable fields at the first event, excluding identifiers, dates and free
+text.
+
+```{r}
+t1 <- nx$table_one()
+t1[t1$variable %in% c("age", "sex", "sbp", "hba1c", "pregnant"), c("label", "level", "Drug A", "Placebo", "p_value", "test", "rationale")]
+```
+
+- **Continuous variables** are tested for normality within each arm
+  (Shapiro-Wilk). If normal, they're summarised as mean (SD) with a Welch
+  t-test; if not, as median [IQR] with a Wilcoxon test.
+- **Categorical variables** use a chi-squared test, or Fisher's exact test
+  when any expected count is below 5.
+
+That automatic choice suits **exploratory** analysis. For a **confirmatory**
+analysis, the tests must come from the statistical analysis plan, and SAP
+mode enforces that:
+
+```{r}
+try(nx$table_one(mode = "sap"))
+nx$table_one(vars = c("age", "sex"), tests = list(age = "t.test", sex = "chisq"), mode = "sap")[, c("label", "level", "p_value", "test", "rationale")]
+```
+
+## Outliers that become queries
+
+```{r}
+o <- nx$outliers("weight")
+o[o$outlier, ]
+```
+
+Scores are robust z-scores (from the median and MAD) within each visit, so
+one extreme value cannot hide itself by inflating the standard deviation.
+In the apps, clicking a flagged point raises the query.
+
+## Trends by arm
+
+```{r}
+tr <- nx$trend("weight")
+tr[, c("event", "group", "n", "mean", "lower", "upper")]
+```
+
+## Models
+
+All models run on the shaped data. Formulas use the shaped column names.
+
+```{r}
+# ANCOVA: week-24 SBP adjusted for baseline (wide data)
+nx$fit("sbp__week_24 ~ arm + sbp__baseline", "linear")[, c("term", "estimate", "conf_low", "conf_high", "p_value")]
+
+# Logistic: any serious adverse event (repeating form collapsed per subject)
+nx$fit("any_ae_serious ~ arm", "logistic")[, c("term", "odds_ratio", "ratio_low", "ratio_high", "p_value")]
+
+# Cox: time to the primary endpoint
+nx$fit("Surv(followup_days, event_occurred == 'Yes') ~ arm + age", "cox")[, c("term", "hazard_ratio", "ratio_low", "ratio_high", "p_value")]
+
+# Mixed model for repeated measures (long data, record-level fields carried to each visit)
+mm <- nx$fit("sbp ~ arm * redcap_event_name + (1 | record_id)", "mixed")
+mm[, c("term", "estimate", "conf_low", "conf_high", "p_value")]
+attr(mm, "random_effects")
+```
+
+The simulated drug lowers systolic BP by about 9 mmHg versus placebo at week
+24, and the mixed model recovers it (the `armPlacebo:...week_24` term).
+
+## Reproducibility
+
+Each call above was logged. `nx$script()` returns a linear R script that
+replays them, with the project connection read from the environment, never a
+token:
+
+```{r}
+cat(tail(strsplit(nx$script(), "\n")[[1]], 12), sep = "\n")
+```
+
+To pin an analysis to a frozen, signed-off dataset, call
+`nx$use_cut(cut_id, require_signoff = TRUE)` first. See
+[Reports, CDISC and reproducibility](reports-cdisc.html).

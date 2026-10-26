@@ -1,0 +1,95 @@
+// REDCap CDMSTAT site styles, following the Neudata pkgdown template
+// structure with the CDMSTAT system colours.
+
+$cdm-red: #A01621;
+$cdm-charcoal: #323436;
+$cdm-navy: #1F3B57;
+$cdm-blue: #2C5D8F;
+$cdm-mist: #F3F4F6;
+$cdm-line: #DDE1E6;
+
+.navbar {
+  background-color: $cdm-charcoal !important;
+  border-bottom: 4px solid $cdm-red;
+}
+
+.navbar-brand {
+  font-weight: 700;
+}
+
+h1, .h1 {
+  font-weight: 800;
+  color: $cdm-charcoal;
+}
+
+h2, .h2 {
+  border-bottom: 2px solid $cdm-red;
+  padding-bottom: 0.25rem;
+  margin-top: 2rem;
+}
+
+h3, .h3 {
+  color: $cdm-navy;
+}
+
+// Package logo on the home page and navbar
+img.logo {
+  background: #fff;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.template-reference-index h2 {
+  color: $cdm-charcoal;
+}
+
+pre {
+  background-color: $cdm-mist;
+  border-left: 4px solid $cdm-red;
+}
+
+// Tables: plain, readable comparison and feature tables
+.contents table {
+  font-size: 0.95rem;
+  display: block;
+  overflow-x: auto;
+  th {
+    background: $cdm-mist;
+    color: $cdm-charcoal;
+  }
+  td, th {
+    border-color: $cdm-line;
+    vertical-align: top;
+  }
+}
+
+// Screenshots
+.screenshot {
+  border: 1px solid $cdm-line;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  max-width: 100%;
+  margin: 0.5rem 0 1.25rem;
+}
+
+.figure-caption, .caption {
+  color: #5f6b76;
+  font-size: 0.9rem;
+}
+
+// Pipeline diagram
+.pipeline-figure svg {
+  max-width: 100%;
+  height: auto;
+}
+
+footer {
+  border-top: 4px solid $cdm-red;
+  background: $cdm-charcoal;
+  color: #fff;
+  padding: 1rem 1.5rem;
+
+  a {
+    color: #F2B8BD;
+  }
+}

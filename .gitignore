@@ -25,3 +25,6 @@ REDCapCDMSTAT/..Rcheck/
 
 # Generated validation evidence (archive it in your QMS, not in git)
 validation/output/
+
+# pkgdown output is built and published by CI
+REDCapCDMSTAT/docs/

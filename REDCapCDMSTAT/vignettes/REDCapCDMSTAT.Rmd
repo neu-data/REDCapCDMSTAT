@@ -1,0 +1,87 @@
+---
+title: "Get started with REDCapCDMSTAT"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Get started with REDCapCDMSTAT}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+REDCapCDMSTAT is one engine for clinical **data management** and
+**statistical analysis** on REDCap studies. This page takes you from
+installation to a first query, a first Table 1 and a reproducible script in
+a few minutes, using the built-in simulated trial.
+
+## Install
+
+```r
+# install.packages("pak")
+pak::pak("neu-data/REDCapCDMSTAT/REDCapCDMSTAT")
+```
+
+## Open the demo study
+
+The demo is a simulated two-arm randomised trial: 120 subjects at four sites,
+three visits (baseline, week 12, week 24), a repeating adverse-event form,
+and a handful of planted data problems, so every part of the pipeline has
+something to find.
+
+```{r}
+library(REDCapCDMSTAT)
+nx <- cdmstat_demo(dir = file.path(tempdir(), "get-started"), reset = TRUE, actor = "dana")
+nx
+```
+
+`nx` is a [CDMSTAT] engine object. Its methods cover the whole workflow; see
+`?CDMSTAT` for the full list.
+
+## Find the data problems
+
+Rules come from the **live data dictionary** (ranges, required fields,
+values hidden by branching logic, stale calculated fields) plus any custom
+rules you add:
+
+```{r}
+issues <- nx$validate()
+issues[, c("severity", "rule", "record_id", "event", "field", "value")]
+```
+
+Turn them into tracked queries:
+
+```{r}
+nx$raise_queries()
+head(nx$queries()[, c("record_id", "field", "message", "status")], 4)
+```
+
+Fixing a value in REDCap and syncing resolves the matching query
+automatically.
+
+## A first Table 1
+
+The treatment arm and the baseline variables are detected from the
+dictionary, and each variable's test is chosen from the data. The
+`rationale` column says why:
+
+```{r}
+t1 <- nx$table_one()
+t1[t1$level %in% c("", "mean (SD)", "median [IQR]"), c("label", "Drug A", "Placebo", "p_value", "test")]
+```
+
+## A reproducible script
+
+Every analytic step is logged as R code that replays the session, so a
+point-and-click session in the app hands the statistician a script:
+
+```{r}
+cat(tail(strsplit(nx$script(), "\n")[[1]], 8), sep = "\n")
+```
+
+## Next steps
+
+- Run the [end-to-end pipeline](pipeline.html) on the demo.
+- Open the same project in the [Shiny app](shiny-app.html) with `run_app()`.
+- [Connect your own REDCap project](connect-redcap.html).

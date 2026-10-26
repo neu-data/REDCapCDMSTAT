@@ -1,0 +1,60 @@
+# Neudata · REDCap External Module tests (PHP) and gateway checks (Python)
+name: module-and-gateway
+
+on:
+  push:
+    branches: [main]
+    paths: ["redcap-module/**", "web/**", ".github/workflows/module-and-gateway.yaml"]
+  pull_request:
+    paths: ["redcap-module/**", "web/**", ".github/workflows/module-and-gateway.yaml"]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  external-module:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['7.4', '8.1', '8.3']
+    name: External Module (PHP ${{ matrix.php }})
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite
+      - name: Lint
+        run: php -l redcap-module/cdmstat_drw_v1.0.0/CDMSTATDRW.php
+      - name: Validate config.json
+        run: php -r 'json_decode(file_get_contents("redcap-module/cdmstat_drw_v1.0.0/config.json")); exit(json_last_error() ? 1 : 0);'
+      - name: Tests
+        run: php redcap-module/cdmstat_drw_v1.0.0/tests/run_tests.php
+
+  gateway:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install
+        run: pip install -r web/gateway/requirements.txt
+      - name: Import and user management smoke test
+        working-directory: web/gateway
+        env:
+          CDMSTAT_GATEWAY_SECRET: ci-secret
+          CDMSTAT_USERS_FILE: /tmp/users.json
+        run: |
+          python -c "import main; print('gateway imports')"
+          key=$(python manage_users.py add ci dm)
+          python manage_users.py list | grep -q "^ci"
+          python - <<'EOF'
+          from fastapi.testclient import TestClient
+          import main
+          c = TestClient(main.app)
+          assert c.get("/auth/me").status_code == 401
+          assert c.get("/api/summary", headers={"Authorization": "Bearer wrong"}).status_code == 401
+          assert c.post("/det?token=nope").status_code == 403
+          print("gateway auth checks passed")
+          EOF

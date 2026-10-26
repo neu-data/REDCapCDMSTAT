@@ -1,0 +1,62 @@
+---
+title: "Validation and deployment"
+description: "IQ/OQ/PQ, requirement traceability, HTTPS deployment and security."
+---
+
+## Validation pack
+
+The `validation/` folder in the repository supports a risk-based computer
+system validation:
+
+| File | Purpose |
+|---|---|
+| `requirements.csv` | 25 user requirements, each with a risk level and the tests that verify it |
+| `run_validation.R` | Installation qualification (IQ) and operational qualification (OQ) runner |
+| `PQ-protocol.md` | Performance qualification protocol for your own study (18 test cases) |
+
+```bash
+Rscript validation/run_validation.R /path/to/php
+```
+
+The runner does four things:
+
+1. **Installation checks:** R version, required packages and their versions,
+   installed components, a ledger read/write test, and the External Module
+   files.
+2. **The full R test suite.**
+3. **The External Module tests,** when PHP is available.
+4. **The traceability matrix:** each requirement passes only if every test
+   mapped to it passes.
+
+It writes a Markdown and HTML report (with SHA-256 hashes of the R sources,
+`sessionInfo()` and signature blocks) and a CSV of every result to
+`validation/output/`. The current release passes 18/18 IQ checks, 46/46 R
+tests (210 expectations), 44/44 module checks and 25/25 requirements.
+
+PQ is your organisation's step: run `PQ-protocol.md` on a development copy
+of the production project, with your users and your infrastructure.
+
+## Deployment
+
+```
+browser ──HTTPS──> nginx or Caddy :443 ──> gateway 127.0.0.1:8080 ──> R engine 127.0.0.1:8000 ──> REDCap API
+```
+
+The repository's `deploy/` folder has:
+
+| File | Purpose |
+|---|---|
+| `nginx-cdmstat.conf` | TLS, HSTS and security headers, WebSocket proxying, and access logs that drop keys |
+| `Caddyfile` | The same with automatic certificates |
+| `cdmstat-api.service`, `cdmstat-gateway.service` | Hardened systemd units |
+| `cdmstat.env.example` | All settings in one environment file |
+| `README.md` | Linux and Windows Server steps and a security checklist |
+
+## Security checklist (summary)
+
+- [ ] **Network:** HTTPS only, and ports 8000 and 8080 are not reachable from the network.
+- [ ] **Secrets:** the gateway secret and Data Entry Trigger token are random and kept only in the service environment.
+- [ ] **REDCap account:** a dedicated service account with the minimum REDCap rights.
+- [ ] **Data folder:** on encrypted storage, mode 0700, backed up daily, with a restore tested.
+- [ ] **People:** one personal key each, removed when they leave.
+- [ ] **Upgrades:** IQ/OQ is re-run and archived after every upgrade.

@@ -1,0 +1,118 @@
+---
+title: "Shiny app"
+description: "One workspace for data managers and statisticians."
+---
+
+```r
+library(REDCapCDMSTAT)
+run_app()            # the saved REDCap connection, or the demo if none
+run_app(nx)          # an engine you already opened
+```
+
+The app uses the same engine and ledger as the R package. A query raised in
+the app shows up in `nx$queries()`, and the script logged by your clicks
+replays in R. Each browser session has its own engine, so choosing a data
+cut affects only that user. Changes made through the API or REDCap's Data
+Entry Trigger appear within three seconds.
+
+## Overview
+
+<img src="../reference/figures/screenshots/shiny-overview.png" class="screenshot" alt="Overview tab">
+
+Records, open queries, rule violations and the last sync, followed by queries
+by status and source, dictionary drift history and sync history.
+
+## Data quality
+
+<img src="../reference/figures/screenshots/shiny-data-quality.png" class="screenshot" alt="Data quality tab">
+
+The current rule violations from the live dictionary and your custom rules.
+**Raise queries for new issues** creates queries; fixed issues auto-resolve.
+You can add custom rules in REDCap logic from the sidebar.
+
+## Queries
+
+<img src="../reference/figures/screenshots/shiny-queries.png" class="screenshot" alt="Queries tab">
+
+The query ledger with filters. Select a query to see its audit trail, move
+it to another status (a reason is required) or comment. **Enable DRW
+write-back** and **Sync with REDCap DRW** connect it to REDCap's Data
+Resolution Workflow.
+
+## Explore: point, click, query
+
+<img src="../reference/figures/screenshots/shiny-explore.png" class="screenshot" alt="Explore tab">
+
+A scatter of any two numeric fields, with outliers on Y flagged by robust z
+or Tukey IQR per visit. Clicking a point opens a pre-filled query for that
+record, visit and field, which lands in the same ledger the data managers
+work from.
+
+## Wrangle
+
+<img src="../reference/figures/screenshots/shiny-wrangle.png" class="screenshot" alt="Wrangle tab">
+
+Toggle long or wide by event, and drop, collapse or isolate repeating forms.
+The variable list updates immediately; download the CSV.
+
+## Statistics
+
+<img src="../reference/figures/screenshots/shiny-table1.png" class="screenshot" alt="Table 1">
+
+Table 1 by any categorical field and event, with the rationale for each test.
+
+<img src="../reference/figures/screenshots/shiny-trends.png" class="screenshot" alt="Longitudinal trends">
+
+Mean and 95% CI of any field by visit and arm.
+
+<img src="../reference/figures/screenshots/shiny-model.png" class="screenshot" alt="Model builder with a mixed model">
+
+The model builder fits linear, logistic, Cox and mixed models. Here a mixed
+model for repeated systolic BP recovers the simulated drug effect at week 24.
+
+## Data cuts and script
+
+<img src="../reference/figures/screenshots/shiny-cuts.png" class="screenshot" alt="Data cuts">
+
+Freeze the current data, sign a cut off, and choose a cut to analyse.
+
+<img src="../reference/figures/screenshots/shiny-script.png" class="screenshot" alt="Script">
+
+The reproducible R script of the session's analysis steps.
+
+## CDMS menu
+
+| Tab | What it does |
+|---|---|
+| Randomization | Generate the concealed stratified schedule; randomise subjects; see balance and the allocation log |
+| SDV | Apply the risk-based plan; tick units and mark them verified |
+| Locks & e-signatures | Lock or unlock records; sign records (re-typing your user name) |
+| Medical coding | Auto-code a verbatim field; approve suggestions; load your dictionary |
+| Deviations | Detect out-of-window visits; log and close deviations |
+| Site metrics | Per-site queries, SDV progress and deviations; enrolment curves |
+| CDISC export | SDTM DM, VS, LB, AE, SV, DS previews; download SDTM, define.xml and ODM as a zip |
+| Activity trail | Every CDMS action, append-only |
+
+<img src="../reference/figures/screenshots/shiny-randomization.png" class="screenshot" alt="Randomization">
+<img src="../reference/figures/screenshots/shiny-sdv.png" class="screenshot" alt="Source data verification">
+<img src="../reference/figures/screenshots/shiny-coding.png" class="screenshot" alt="Medical coding">
+<img src="../reference/figures/screenshots/shiny-site-metrics.png" class="screenshot" alt="Site metrics">
+<img src="../reference/figures/screenshots/shiny-cdisc.png" class="screenshot" alt="CDISC export">
+
+## Connection
+
+<img src="../reference/figures/screenshots/shiny-connection.png" class="screenshot" alt="Connection tab">
+
+Test a REDCap URL and token (read-only), then save and connect. See
+[Connect your REDCap project](connect-redcap.html).
+
+## Portfolio dashboard
+
+```r
+run_portfolio(c(trial_a = "C:/data/trial_a", trial_b = "C:/data/trial_b"))
+```
+
+A separate app that summarises several study folders side by side: records,
+randomised subjects, open queries and the oldest open query, rule violations,
+SDV progress, deviations and locks. It also shows site metrics across all
+studies.
