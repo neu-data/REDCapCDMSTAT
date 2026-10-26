@@ -1,4 +1,3 @@
-^\.claude$
 ^.*\.Rproj$
 ^_pkgdown\.yml$
 ^docs$
