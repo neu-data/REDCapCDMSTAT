@@ -22,3 +22,6 @@ __pycache__/
 REDCapCDMSTAT/..Rcheck/
 *.Rcheck/
 *.tar.gz
+
+# Generated validation evidence (archive it in your QMS, not in git)
+validation/output/

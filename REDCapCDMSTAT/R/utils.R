@@ -18,6 +18,13 @@ new_id <- function(prefix) {
 }
 
 # Parse a REDCap choice string ("1, Male | 2, Female") into codes and labels.
+#' Parse a REDCap choice string
+#'
+#' @param x Input text.
+#' @return Data frame with `code` and `label`.
+#' @examples
+#' parse_choices("1, Male | 2, Female")
+#' @export
 parse_choices <- function(x) {
   if (is.null(x) || is.na(x) || !nzchar(trimws(x))) {
     return(data.frame(code = character(), label = character(), stringsAsFactors = FALSE))

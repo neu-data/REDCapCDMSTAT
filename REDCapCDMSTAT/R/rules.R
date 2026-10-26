@@ -10,12 +10,22 @@ empty_issues <- function() {
              issue_key = character(), stringsAsFactors = FALSE)
 }
 
+#' Run data-quality rules
+#'
 #' Run data-quality rules derived from the live data dictionary plus custom rules.
 #'
 #' Dictionary-driven checks: validation ranges, required fields, values present
 #' in fields hidden by branching logic, and stored calculated fields that no
 #' longer match a recalculation. Custom rules are REDCap-syntax conditions that
 #' must be TRUE; rows where they evaluate FALSE are reported.
+#'
+#' @param data Typed data frame (see [type_data()]) or a shaped analysis data frame.
+#' @param md Data dictionary (REDCap metadata export) as a data frame.
+#' @param id_field Name of the record ID field; defaults to the first dictionary field.
+#' @param repeating_forms Names of repeating instruments.
+#' @param rules List of custom rules, each with `id`, `logic` (REDCap syntax, must be TRUE), `message`, `severity` and optionally `field`.
+#' @return Data frame of issues: `rule`, `severity`, `record_id`, `event`, `instance`, `field`, `value`, `message`, `issue_key`.
+#' @export
 run_validation <- function(data, md, id_field = md$field_name[1], repeating_forms = character(),
                            rules = list()) {
   out <- list()

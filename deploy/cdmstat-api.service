@@ -1,0 +1,23 @@
+# systemd unit for the CDMSTAT R engine (plumber). Install to
+# /etc/systemd/system/, then: systemctl enable --now cdmstat-api cdmstat-gateway
+[Unit]
+Description=REDCap CDMSTAT R engine (plumber API, localhost only)
+After=network-online.target
+
+[Service]
+User=cdmstat
+Group=cdmstat
+EnvironmentFile=/etc/cdmstat/cdmstat.env
+ExecStart=/usr/bin/Rscript -e "REDCapCDMSTAT::run_api(host = '127.0.0.1', port = 8000)"
+Restart=on-failure
+RestartSec=5
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cdmstat
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

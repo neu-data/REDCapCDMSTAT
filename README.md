@@ -44,14 +44,14 @@ on top of either platform:
 | EDC / CDMS data access | `cdmstat_cloud()` pulls the study over the REST API as CDISC ODM; `cdmstat_odm()` reads any ODM export. Incremental sync works on both because subjects are change-detected by hash. |
 | Randomisation | Stratified permuted-block schedule (`setup_randomization`), concealed allocation, one allocation per subject, arm written back to the EDC, full audit. |
 | Query management | Rule-driven and analysis-driven queries, an open → answered → resolved → closed lifecycle with reasons, and auto-resolution. On REDCap they are mirrored two-way into the native **Data Resolution Workflow** (see below). |
-| Source data verification | Risk-based SDV plan: critical fields 100%, first N subjects per site, and a random sample. Monitors verify units; edited units return to *reverify*. |
-| Record locking | Lock a record, event or form. Changes after a lock raise an error-level issue and query. Unlocking needs a reason. |
+| Source data verification | Risk-based SDV plan: critical fields 100%, first N subjects per site, and a random sample. Monitors verify units; edited units return to *reverify*. On REDCap, verified values are also marked verified in the DRW. |
+| Record locking | Lock a record, event or form. On REDCap the forms are locked in REDCap itself through the External Module, so edits are refused; changes on other EDCs raise an error-level issue. Unlocking needs a reason. |
 | 21 CFR Part 11 e-signatures | The signature binds signer, meaning and a hash of the data, and is flagged invalid if the data later change. The gateway re-authenticates the signer's credential before signing. |
 | Medical coding | Exact and synonym auto-coding, a fuzzy-match review queue and coder approval. Ships a demo dictionary with fictitious codes; load your licensed MedDRA / WHODrug export. |
 | Protocol deviations | Manual log plus automatic out-of-window visit detection from the event schedule, with major/minor severity and closure comments. |
-| Portfolio / site oversight | Per-site metrics (subjects, randomised, open queries, query age, time to resolution, SDV %, deviations) and enrolment curves. |
+| Portfolio / site oversight | Per-site metrics (subjects, randomised, open queries, query age, time to resolution, SDV %, deviations) and enrolment curves; `cdmstat_portfolio()` / `run_portfolio()` compare several studies. |
 | Audit trail | Append-only activity trail for every CDMS action, plus a query audit, a sync log and dictionary drift history. |
-| CDISC standards | SDTM DM/VS/LB/AE (CSV and SAS transport `.xpt`), with AEDECOD taken from coding. ODM 1.3 export/import. |
+| CDISC standards | SDTM DM, VS, LB, AE, SV and DS (CSV and SAS transport `.xpt`) with a Define-XML 2.0 file; AEDECOD is taken from coding. ODM 1.3 export/import. |
 | Role-based access | Gateway roles: `dm`, `stats`, `monitor`, `pi`, `viewer`. |
 
 Not replicated: eConsent, ePRO/eCOA and eRecruitment. These are
@@ -83,9 +83,12 @@ installed and `nx$drw_enable()` run:
   REDCap are imported.
 
 Sync runs after every `nx$sync()`. You can also run it from the Queries tab
-in Shiny or the web app, or call `nx$drw_sync()`. The module checks DRW
-rights per action, refuses to write if REDCap's DRW schema is not what it
-expects, and logs every write to REDCap's project Logging.
+in Shiny or the web app, or call `nx$drw_sync()`. With the default options,
+`nx$lock()` also locks the forms inside REDCap, and `nx$sdv_verify()` marks
+the values verified in the DRW; turn these off with
+`nx$drw_enable(lock_in_edc = FALSE, verify_sdv = FALSE)`. The module checks
+DRW and locking rights per action, refuses to write if REDCap's schema is not
+what it expects, and logs every write to REDCap's project Logging.
 
 ## 1. R package
 
@@ -116,15 +119,23 @@ nx$check_visit_windows(window = 7); nx$site_metrics()
 
 # Statistics, reproducibility and export
 nx$table_one(); nx$trend("sbp"); nx$fit("Surv(followup_days, event_occurred == 'Yes') ~ arm", "cox")
+nx$fit("sbp ~ arm * redcap_event_name + (1 | record_id)", "mixed")   # repeated measures
 cut <- nx$freeze("Interim 1"); nx$sign_off(cut, "Data clean"); nx$use_cut(cut, require_signoff = TRUE)
-nx$export_cdisc("cdisc_out")                           # dm/vs/lb/ae .csv + .xpt, study.odm.xml
+nx$export_cdisc("cdisc_out")                           # SDTM .csv + .xpt, define.xml, study.odm.xml
 cat(nx$script())
+
+# Several studies side by side
+cdmstat_portfolio(list(trial_a = nx, trial_b = "/path/to/other/cache"))
 ```
 
-Run the tests with `testthat::test_local("REDCapCDMSTAT")`: 154
-expectations, including a mock REDCap Cloud server and the DRW sync. Run the
-External Module's own tests with
-`php redcap-module/cdmstat_drw_v1.0.0/tests/run_tests.php` (34 checks).
+Every exported function and class has a help page (`?CDMSTAT`,
+`?cdmstat_connect`, `?table_one` and so on), and `R CMD check` passes with no
+errors, warnings or notes.
+
+Run the tests with `testthat::test_local("REDCapCDMSTAT")`: 179
+expectations, including a mock REDCap Cloud server, the DRW sync and REDCap
+locking. Run the External Module's own tests with
+`php redcap-module/cdmstat_drw_v1.0.0/tests/run_tests.php` (44 checks).
 
 ## 2. Shiny app
 
@@ -133,9 +144,13 @@ REDCapCDMSTAT::run_app()
 ```
 
 Main tabs: Overview, Data quality, Queries, Explore (click-to-query),
-Wrangle, Statistics, Data cuts and Script. A **CDMS** menu holds
+Wrangle, Statistics (Table 1, trends, and a model builder with linear,
+logistic, Cox and mixed models), Data cuts and Script. A **CDMS** menu holds
 Randomization, SDV, Locks & e-signatures, Medical coding, Deviations,
-Site metrics, CDISC export and Activity trail.
+Site metrics, CDISC export and Activity trail. Each browser session has its
+own engine, so choosing a data cut affects only that user.
+
+For several studies, run `REDCapCDMSTAT::run_portfolio(c(trial_a = "<dir>", trial_b = "<dir>"))`.
 
 ## 3. Standalone web app
 
@@ -168,6 +183,26 @@ REDCapCDMSTAT::render_report(dir = nx$dir, cut_id = cut, require_signoff = TRUE)
 It renders with Quarto, then rmarkdown (needs pandoc), then knitr + markdown,
 using whichever is available. See `examples/sample-report.html`.
 
+## Validation (IQ/OQ/PQ)
+
+```bash
+Rscript validation/run_validation.R /path/to/php
+```
+
+This runs the installation checks, the full R test suite and the External
+Module tests, and traces each result to the user requirements in
+[validation/requirements.csv](validation/requirements.csv). It writes a
+signed-off-ready report to `validation/output/`. The latest run passed: 18/18
+IQ checks, 41/41 R tests, 44/44 module tests and 24/24 requirements.
+Performance qualification on your own study follows
+[validation/PQ-protocol.md](validation/PQ-protocol.md).
+
+## Deployment
+
+[deploy/](deploy/README.md) has nginx and Caddy HTTPS configs, systemd units,
+an environment template and a security checklist covering encrypted storage,
+backups, secrets and log redaction.
+
 ## Configuration (app and API)
 
 | Variable | Meaning |
@@ -185,7 +220,8 @@ using whichever is available. See `examples/sample-report.html`.
 
 - **REDCap Cloud API paths:** REDCap Cloud documents its REST API inside each customer account, not publicly. The connector is tested against a mock server; set `export_path` / `import_path` / the auth header from your instance's API documentation.
 - **MedDRA / WHODrug** are licensed and not bundled. The demo dictionary's codes are fictitious.
-- **Locks and signatures live in CDMSTAT's ledger.** They detect and flag later edits in the EDC but cannot block them. Lock records in the EDC too where it supports that.
-- **DRW module:** it has been tested against a stub framework and an SQLite copy of the DRW tables, not yet on a live REDCap server. Install it on a development REDCap copy first and confirm the threads display correctly in the DRW pop-up. It handles field-level queries and verification, not Data Quality rule discrepancies or file attachments.
-- **Shiny shares one engine per process**, so "Analyse selected cut" applies to every user of that process. The web app separates users.
-- **The cache holds identifiable data.** Keep `CDMSTAT_DIR` on encrypted, access-controlled storage. Software validation (IQ/OQ/PQ) for GCP use is the deploying organisation's responsibility.
+- **DRW External Module not yet run on a live REDCap.** It has been tested against a stub framework and SQLite copies of the DRW and locking tables. Install it on a development REDCap copy first (PQ-05 to PQ-09) and confirm that threads and locks display correctly. It handles field-level queries, verification and form locks, not Data Quality rule discrepancies or file attachments.
+- **E-signatures are not written into REDCap.** REDCap's own e-signature requires the signer's REDCap password, so CDMSTAT signatures stay in its ledger, bound to a hash of the data.
+- **On REDCap Cloud and ODM sources, locks are detect-only.** Edits after a lock are flagged, not blocked.
+- **SDTM mapping is guessed from field names** (`sdtm_default_map()`); real studies need it reviewed. define.xml has dataset and variable metadata but no controlled-terminology code lists. Run a conformance checker before submission.
+- **The cache holds identifiable data.** Follow the [deployment security checklist](deploy/README.md#security-checklist). PQ on your own study (validation/PQ-protocol.md) is the deploying organisation's responsibility.

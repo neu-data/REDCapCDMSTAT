@@ -1,7 +1,7 @@
 {
   "name": "CDMSTAT Data Resolution Workflow API",
   "namespace": "Neudata\\CDMSTATDRW",
-  "description": "Exposes REDCap's native Data Resolution Workflow (field-level data queries and data verification) through the REDCap API so that REDCap CDMSTAT, or any client holding a project API token, can open, respond to, close and reopen queries, mark values verified, and read query threads back. Every write is checked against the token user's Data Resolution Workflow rights and logged in the project's logging.",
+  "description": "Exposes REDCap's native Data Resolution Workflow (field-level data queries and data verification) through the REDCap API so that REDCap CDMSTAT, or any client holding a project API token, can open, respond to, close and reopen queries, mark values verified, read query threads back, and lock or unlock forms so that a CDMSTAT database lock is enforced inside REDCap. Every write is checked against the token user's Data Resolution Workflow rights and logged in the project's logging.",
   "framework-version": 15,
   "authors": [
     {
@@ -53,6 +53,15 @@
     },
     "deverify-field": {
       "description": "Removes verification from a field value. Same parameters as verify-field; <code>comment</code> is required."
+    },
+    "lock-form": {
+      "description": "Locks a data entry form so it cannot be edited. Required: <code>record</code>, <code>form</code>. Optional: <code>event</code>, <code>instance</code>, <code>actor</code>, <code>reason</code>. Needs the Record Locking user right."
+    },
+    "unlock-form": {
+      "description": "Unlocks a form. Required: <code>record</code>, <code>form</code>, <code>reason</code>. Optional: <code>event</code>, <code>instance</code>, <code>actor</code>."
+    },
+    "list-locks": {
+      "description": "Lists locked forms. Optional: <code>record</code>."
     }
   }
 }

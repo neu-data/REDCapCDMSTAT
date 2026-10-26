@@ -104,7 +104,9 @@ test_that("fixing data auto-resolves and closes the DRW query on sync", {
 })
 
 test_that("non-field queries are skipped, not retried", {
-  nx <- drw_demo()
+  # CDMSTAT-only lock (not mirrored to REDCap), so the later edit goes through.
+  nx <- cdmstat_demo(dir = tempfile("drw"), actor = "dana")
+  nx$drw_enable(lock_in_edc = FALSE)
   nx$lock("10", "lock")
   nx$backend$edit("10", "weight", "70.2")
   nx$sync()

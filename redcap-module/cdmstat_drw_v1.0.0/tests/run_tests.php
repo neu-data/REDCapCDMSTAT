@@ -54,7 +54,14 @@ namespace {
             $this->params = array_merge($this->params, $values);
             return $this;
         }
-        public function execute() { return $this->m->query($this->sql, $this->params); }
+        public $affected_rows = 0;
+        public function execute()
+        {
+            $st = $this->m->pdo->prepare($this->sql);
+            $st->execute(array_values($this->params));
+            $this->affected_rows = $st->rowCount();
+            return new \FakeResult($st);
+        }
     }
 
     require __DIR__ . '/../CDMSTATDRW.php';
@@ -217,6 +224,36 @@ namespace {
     check($s === 200, 'superuser bypasses project rights');
     check(count($m->audit) >= 8, 'every write is audited (' . count($m->audit) . ' entries)');
 
+
+    echo "form locking\n";
+    $m->pdo->exec("create table redcap_locking_data (ld_id integer primary key autoincrement, project_id int, record text, event_id int, form_name text, instance int not null default 1, username text, timestamp text)");
+    $m->pdo->exec("alter table redcap_user_rights add column lock_record int default 0");
+    $m->pdo->exec("alter table redcap_user_roles add column lock_record int default 0");
+    $m->pdo->exec("update redcap_user_rights set lock_record = 1 where username = 'svc_cdmstat'");
+    $m->pdo->exec("alter table redcap_metadata add column form_name text");
+    $m->pdo->exec("update redcap_metadata set form_name = 'vitals'");
+    [$s, $b] = $m->call('drw-status');
+    check($b['lock_right'] === 1 && $b['locking_schema_ok'] === true, 'status reports lock right and locking schema');
+    [$s, $b] = $m->call('lock-form', ['record' => '1', 'form' => 'vitals', 'event' => 'baseline_arm_1', 'actor' => 'dana', 'reason' => 'DB lock']);
+    check($s === 200 && $b['locked'] && !$b['already_locked'], 'lock form');
+    [$s, $b] = $m->call('lock-form', ['record' => '1', 'form' => 'vitals', 'event' => 'baseline_arm_1']);
+    check($s === 200 && $b['already_locked'], 'locking twice is idempotent');
+    [$s, $b] = $m->call('lock-form', ['record' => '1', 'form' => 'vitals'], 'site_crc');
+    check($s === 403, 'user without the locking right is refused');
+    [$s, $b] = $m->call('lock-form', ['record' => '1', 'form' => 'nope']);
+    check($s === 400, 'unknown form refused');
+    [$s, $b] = $m->call('list-locks', ['record' => '1'], 'viewer');
+    check($s === 200 && count($b['locks']) === 1 && $b['locks'][0]['event'] === 'baseline_arm_1' && $b['locks'][0]['username'] === 'svc_cdmstat', 'list locks');
+    [$s, $b] = $m->call('unlock-form', ['record' => '1', 'form' => 'vitals', 'event' => 'baseline_arm_1']);
+    check($s === 400, 'unlock needs a reason');
+    [$s, $b] = $m->call('unlock-form', ['record' => '1', 'form' => 'vitals', 'event' => 'baseline_arm_1', 'reason' => 'Correction approved']);
+    check($s === 200 && $b['unlocked'], 'unlock');
+    [$s, $b] = $m->call('list-locks');
+    check(count($b['locks']) === 0, 'no locks left');
+    $m->dropColumn = 'form_name';
+    [$s, $b] = $m->call('lock-form', ['record' => '1', 'form' => 'vitals']);
+    check($s === 501, 'unexpected locking schema refuses writes');
+    $m->dropColumn = null;
     echo "\n$n checks, $fails failed\n";
     exit($fails ? 1 : 0);
 }

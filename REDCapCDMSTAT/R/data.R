@@ -1,6 +1,13 @@
+#' Convert raw REDCap exports to analysis types
+#'
 #' Convert raw (all-character) REDCap export data to analysis types using the
 #' data dictionary: numbers, dates, integer yes/no and checkbox columns.
 #' Radio and dropdown fields keep their raw codes.
+#'
+#' @param raw Raw (all-character) REDCap export.
+#' @param md Data dictionary (REDCap metadata export) as a data frame.
+#' @return Data frame with typed columns.
+#' @export
 type_data <- function(raw, md) {
   out <- raw
   out[] <- lapply(out, function(v) {

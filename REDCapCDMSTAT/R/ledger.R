@@ -55,8 +55,15 @@ query_transitions <- list(
   closed = c("open")
 )
 
-#' SQLite ledger holding queries, their audit trail, data cuts, dictionary
-#' drift, sync history and the reproducible script log.
+#' SQLite ledger
+#'
+#' Stores queries and their audit trail, data cuts, dictionary drift, sync history, the script log and all CDMS module state.
+#'
+#' @section Methods:
+#' `$add_query()`, `$transition()`, `$comment()`, `$queries()`, `$audit()`, `$add_cut()`, `$sign_off()`, `$cuts()`, `$log_schema()`, `$schema_history()`, `$log_sync()`, `$sync_history()`, `$log_script()`, `$script_lines()`, `$activity()`, `$get_setting()`, `$set_setting()`, `$get()`, `$run()`.
+#' @format An [R6::R6Class] generator.
+#' @usage NULL
+#' @export
 Ledger <- R6::R6Class("Ledger",
   public = list(
     path = NULL,

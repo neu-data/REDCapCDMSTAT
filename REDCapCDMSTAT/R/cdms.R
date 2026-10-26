@@ -46,7 +46,13 @@ site_of <- function(data, md, id_field) {
 norm_term <- function(x) trimws(gsub("[^a-z0-9 ]+", " ", tolower(x)))
 
 #' A small demonstration coding dictionary. Codes are fictitious ("DEMO-");
+#'
 #' load your licensed MedDRA / WHODrug export with `$load_dictionary()`.
+#'
+#' @return Data frame with columns `code`, `term` and `synonyms`.
+#' @examples
+#' head(demo_dictionary())
+#' @export
 demo_dictionary <- function() {
   data.frame(
     code = c("DEMO-10019211", "DEMO-10028813", "DEMO-10013573", "DEMO-10037844", "DEMO-10016256",
@@ -77,6 +83,36 @@ match_term <- function(verbatim, dict) {
   sim[contained] <- pmax(sim[contained], 0.9)
   b <- which.max(sim)
   list(code = dict$code[owner[b]], term = dict$term[owner[b]], score = round(sim[b], 3), method = "fuzzy")
+}
+
+
+# Forms of a record (optionally one event / form) that hold data, as
+# record/event/form/instance rows for EDC-side locking.
+edc_units <- function(raw, md, id_field, record_id, event = NA, form = NA, repeating_forms = character()) {
+  rows <- scope_rows(raw, id_field, record_id, event)
+  out <- list()
+  rep_col <- rows$redcap_repeat_instrument %||% rep("", nrow(rows))
+  for (i in seq_len(nrow(rows))) {
+    forms <- if (nzchar(rep_col[i] %||% "")) rep_col[i] else setdiff(unique(md$form_name), repeating_forms)
+    if (!is.na(form)) forms <- intersect(forms, form)
+    for (f in forms) {
+      cols <- intersect(setdiff(field_columns(md, md$field_name[md$form_name == f]), id_field), names(rows))
+      if (!length(cols) || all(is_blank(unlist(rows[i, cols, drop = FALSE])))) next
+      out[[length(out) + 1]] <- list(record = record_id, event = rows$redcap_event_name[i] %||% NA, form = f,
+                                     instance = if (nzchar(rep_col[i] %||% "")) rows$redcap_repeat_instance[i] else NA)
+    }
+  }
+  out
+}
+
+edc_call <- function(nx, action, payload) {
+  cfg <- nx$ledger$get_setting("drw", list())
+  nx$backend$drw(action, payload, prefix = cfg$prefix %||% "cdmstat_drw")
+}
+
+edc_enabled <- function(nx, what) {
+  cfg <- nx$ledger$get_setting("drw", list())
+  isTRUE(cfg$enabled) && isTRUE(cfg[[what]]) && !is.null(nx$backend)
 }
 
 # ---- randomisation ---------------------------------------------------------
@@ -129,8 +165,8 @@ CDMSTAT$set("public", "setup_randomization", function(strata = character(), rati
   invisible(cfg)
 })
 
-#' Allocate the next concealed slot in the subject's stratum and write the
-#' arm back to the EDC when the backend supports it.
+# Allocate the next concealed slot in the subject's stratum and write the
+# arm back to the EDC when the backend supports it.
 CDMSTAT$set("public", "randomize", function(record_id, actor = self$actor, write_back = TRUE) {
   cfg <- self$ledger$get_setting("randomization")
   if (is.null(cfg)) stop("Randomisation is not set up.", call. = FALSE)
@@ -185,9 +221,9 @@ CDMSTAT$set("public", "randomization_status", function() {
 
 # ---- source data verification ----------------------------------------------
 
-#' Define the SDV plan: forms with critical fields are always verified, plus
-#' the first `first_n` subjects of every site and a random `sample_rate`
-#' fraction of the rest (risk-based SDV).
+# Define the SDV plan: forms with critical fields are always verified, plus
+# the first `first_n` subjects of every site and a random `sample_rate`
+# fraction of the rest (risk-based SDV).
 CDMSTAT$set("public", "sdv_plan", function(critical_fields = character(), first_n = 3, sample_rate = 0.2,
                                            seed = 1, actor = self$actor) {
   cfg <- list(critical_fields = critical_fields, first_n = first_n, sample_rate = sample_rate, seed = seed)
@@ -196,8 +232,8 @@ CDMSTAT$set("public", "sdv_plan", function(critical_fields = character(), first_
   self$sdv_refresh()
 })
 
-#' Recompute SDV units from the current data: add new units, and send
-#' verified units whose data changed back to "reverify".
+# Recompute SDV units from the current data: add new units, and send
+# verified units whose data changed back to "reverify".
 CDMSTAT$set("public", "sdv_refresh", function() {
   cfg <- self$ledger$get_setting("sdv", list(critical_fields = character(), first_n = 3, sample_rate = 0.2, seed = 1))
   raw <- self$raw
@@ -267,6 +303,24 @@ CDMSTAT$set("public", "sdv_verify", function(unit_keys, actor = self$actor, comm
                          list(actor, at, comment, k))
     if (!n) stop("Unknown SDV unit: ", k, call. = FALSE)
     self$ledger$activity(actor, "sdv", "verify", k)
+    if (edc_enabled(self, "verify_sdv")) {
+      # Mirror to REDCap: mark each value on the verified form as verified in the DRW.
+      parts <- strsplit(k, "|", fixed = TRUE)[[1]]
+      parts <- c(parts, rep("", 4 - length(parts)))
+      md <- self$metadata
+      rows <- scope_rows(self$raw, self$id_field(), parts[1], parts[2], parts[4])
+      if (!nzchar(parts[4]) && "redcap_repeat_instrument" %in% names(rows)) rows <- rows[is_blank(rows$redcap_repeat_instrument), , drop = FALSE]
+      fields <- setdiff(md$field_name[md$form_name == parts[3] & md$field_type != "descriptive"], self$id_field())
+      for (f in fields) {
+        cols <- intersect(field_columns(md, f), names(rows))
+        if (!length(cols) || all(is_blank(unlist(rows[1, cols, drop = FALSE])))) next
+        r <- tryCatch(edc_call(self, "verify-field", list(record = parts[1], field = f, event = if (nzchar(parts[2])) parts[2] else NULL,
+                                                         instance = if (nzchar(parts[4])) parts[4] else NULL,
+                                                         repeat_instrument = if (nzchar(parts[4])) parts[3] else NULL,
+                                                         comment = comment, actor = actor)), error = function(e) e)
+        if (inherits(r, "error")) self$ledger$activity(actor, "sdv", "drw-verify-failed", paste(k, f, conditionMessage(r)))
+      }
+    }
   }
   invisible(length(unit_keys))
 })
@@ -281,6 +335,15 @@ CDMSTAT$set("public", "lock", function(record_id, reason, event = NA, form = NA,
                   list(id, record_id, if (is.na(event)) NA_character_ else event, if (is.na(form)) NA_character_ else form,
                        h, reason, actor, now_stamp(), NA_character_, NA_character_, NA_character_))
   self$ledger$activity(actor, "lock", "lock", paste0(id, " record ", record_id, if (!is.na(event)) paste0(" event ", event) else "", if (!is.na(form)) paste0(" form ", form) else ""))
+  if (edc_enabled(self, "lock_in_edc")) {
+    n <- 0L
+    for (u in edc_units(self$raw, self$metadata, self$id_field(), record_id, event, form, self$repeating_forms())) {
+      edc_call(self, "lock-form", list(record = u$record, form = u$form, event = u$event, instance = u$instance,
+                                       reason = reason, actor = actor))
+      n <- n + 1L
+    }
+    self$ledger$activity(actor, "lock", "edc-lock", sprintf("%s: %d form(s) locked in REDCap", id, n))
+  }
   id
 })
 
@@ -290,10 +353,17 @@ CDMSTAT$set("public", "unlock", function(lock_id, reason, actor = self$actor) {
                        list(actor, now_stamp(), reason, lock_id))
   if (!n) stop("No active lock ", lock_id, call. = FALSE)
   self$ledger$activity(actor, "lock", "unlock", paste(lock_id, reason))
+  if (edc_enabled(self, "lock_in_edc")) {
+    l <- self$ledger$get("SELECT * FROM locks WHERE lock_id = ?", list(lock_id))
+    for (u in edc_units(self$raw, self$metadata, self$id_field(), l$record_id, l$event, l$form, self$repeating_forms())) {
+      edc_call(self, "unlock-form", list(record = u$record, form = u$form, event = u$event, instance = u$instance,
+                                         reason = reason, actor = actor))
+    }
+  }
   invisible(TRUE)
 })
 
-#' Active locks with an integrity check: "intact" or "CHANGED AFTER LOCK".
+# Active locks with an integrity check: "intact" or "CHANGED AFTER LOCK".
 CDMSTAT$set("public", "locks", function(active_only = TRUE) {
   l <- self$ledger$get(paste("SELECT * FROM locks", if (active_only) "WHERE unlocked_at IS NULL" else "", "ORDER BY locked_at DESC"))
   l$integrity <- vapply(seq_len(nrow(l)), function(i) {
@@ -303,10 +373,10 @@ CDMSTAT$set("public", "locks", function(active_only = TRUE) {
   l
 })
 
-#' Sign a record (21 CFR Part 11 style): the signature binds the signer, the
-#' meaning of the signature and a hash of the record's data at signing time.
-#' The caller must have re-verified the signer's identity (the gateway does
-#' this by re-checking the user's credential) and passes identity_verified.
+# Sign a record (21 CFR Part 11 style): the signature binds the signer, the
+# meaning of the signature and a hash of the record's data at signing time.
+# The caller must have re-verified the signer's identity (the gateway does
+# this by re-checking the user's credential) and passes identity_verified.
 CDMSTAT$set("public", "esign", function(record_id, meaning, actor = self$actor, identity_verified = FALSE) {
   if (!isTRUE(identity_verified)) stop("Signer identity must be re-verified before signing.", call. = FALSE)
   if (missing(meaning) || !nzchar(trimws(meaning))) stop("The meaning of the signature is required.", call. = FALSE)
@@ -328,8 +398,8 @@ CDMSTAT$set("public", "signatures", function() {
 
 # ---- medical coding --------------------------------------------------------
 
-#' Load a coding dictionary (e.g. a MedDRA LLT/PT or WHODrug export) with
-#' columns code, term and optionally synonyms ("|"-separated).
+# Load a coding dictionary (e.g. a MedDRA LLT/PT or WHODrug export) with
+# columns code, term and optionally synonyms ("|"-separated).
 CDMSTAT$set("public", "load_dictionary", function(dict, name = "default", actor = self$actor) {
   if (is.character(dict) && length(dict) == 1) dict <- utils::read.csv(dict, stringsAsFactors = FALSE)
   if (!all(c("code", "term") %in% names(dict))) stop("Dictionary needs columns 'code' and 'term'.", call. = FALSE)
@@ -344,9 +414,9 @@ CDMSTAT$set("public", "dictionary", function(name = "default") {
   if (file.exists(f)) readRDS(f) else demo_dictionary()
 })
 
-#' Code verbatim terms: exact/synonym matches are auto-coded, close fuzzy
-#' matches are queued with a suggestion for a coder to approve. Changed
-#' verbatims are re-coded; approved codes for unchanged verbatims are kept.
+# Code verbatim terms: exact/synonym matches are auto-coded, close fuzzy
+# matches are queued with a suggestion for a coder to approve. Changed
+# verbatims are re-coded; approved codes for unchanged verbatims are kept.
 CDMSTAT$set("public", "code_terms", function(field = "ae_term", dictionary = "default", auto = TRUE,
                                              min_score = 0.6, actor = self$actor) {
   d <- self$data()
@@ -382,7 +452,7 @@ CDMSTAT$set("public", "coding", function(status = NULL) {
     self$ledger$get(sprintf("SELECT * FROM coding WHERE status IN (%s) ORDER BY verbatim", paste(rep("?", length(status)), collapse = ",")), as.list(status))
 })
 
-#' Approve a suggestion, or assign another dictionary code.
+# Approve a suggestion, or assign another dictionary code.
 CDMSTAT$set("public", "approve_coding", function(coding_key, code = NULL, dictionary = "default", actor = self$actor) {
   r <- self$ledger$get("SELECT * FROM coding WHERE coding_key = ?", list(coding_key))
   if (!nrow(r)) stop("Unknown coding item: ", coding_key, call. = FALSE)
@@ -420,8 +490,8 @@ CDMSTAT$set("public", "close_deviation", function(dev_id, comment, actor = self$
 
 CDMSTAT$set("public", "deviations", function() self$ledger$get("SELECT * FROM deviations ORDER BY reported_at DESC"))
 
-#' Detect out-of-window visits from the event schedule (day offsets) and log
-#' each as a protocol deviation once.
+# Detect out-of-window visits from the event schedule (day offsets) and log
+# each as a protocol deviation once.
 CDMSTAT$set("public", "check_visit_windows", function(anchor = "consent_date", visit_field = "visit_date",
                                                       window = 7, actor = "system") {
   ev <- self$events
@@ -450,7 +520,7 @@ CDMSTAT$set("public", "check_visit_windows", function(anchor = "consent_date", v
 
 # ---- operational metrics ---------------------------------------------------
 
-#' Per-site operational metrics for monitoring and portfolio oversight.
+# Per-site operational metrics for monitoring and portfolio oversight.
 CDMSTAT$set("public", "site_metrics", function() {
   d <- self$data()
   md <- self$metadata
@@ -485,7 +555,7 @@ CDMSTAT$set("public", "site_metrics", function() {
   out
 })
 
-#' Cumulative enrolment by site over time, from a consent/enrolment date.
+# Cumulative enrolment by site over time, from a consent/enrolment date.
 CDMSTAT$set("public", "enrollment_curve", function(date_field = NULL) {
   md <- self$metadata
   date_field <- date_field %||% {

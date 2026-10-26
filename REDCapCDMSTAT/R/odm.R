@@ -36,7 +36,16 @@ text_of <- function(node, xpath) {
 }
 
 #' Parse a CDISC ODM 1.3 document into the REDCap-shaped structures used by
+#'
 #' the engine: info, metadata, events, mapping, repeating and records.
+#'
+#' @param x Input text.
+#' @return List with `info`, `metadata`, `events`, `mapping`, `repeating` and `records` in REDCap export shape.
+#' @examples
+#' p <- demo_project(n = 5)
+#' x <- write_odm(p)
+#' nrow(read_odm(x)$records)
+#' @export
 read_odm <- function(x) {
   doc <- if (inherits(x, "xml_document")) x else xml2::read_xml(x)
   xml2::xml_ns_strip(doc)
@@ -182,10 +191,19 @@ read_odm <- function(x) {
        metadata = md, events = events, mapping = mapping, repeating = repeating, records = records)
 }
 
+#' Write a study as CDISC ODM 1.3
+#'
 #' Write a study (metadata + raw records) as a CDISC ODM 1.3 document.
 #'
 #' REDCap-specific attributes are written in the redcap: namespace so the file
 #' re-imports losslessly; other systems ignore them.
+#'
+#' @param state List with `info`, `metadata`, `events`, `mapping`, `repeating` and `records`.
+#' @param file Path to a file.
+#' @param study_oid Study OID written to the ODM file.
+#' @param clinical Include clinical data (not just metadata).
+#' @return The ODM XML as a string, or the file path invisibly when `file` is given.
+#' @export
 write_odm <- function(state, file = NULL, study_oid = state$info$project_id %||% "STUDY",
                       clinical = TRUE) {
   md <- state$metadata

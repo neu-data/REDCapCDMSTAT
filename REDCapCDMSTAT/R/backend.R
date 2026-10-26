@@ -25,8 +25,15 @@ redcap_call <- function(url, token, content, ..., format = "json") {
   if (format == "json") jsonlite::fromJSON(txt, simplifyVector = TRUE) else txt
 }
 
-#' Backend for a live REDCap server. The token is kept private and is never
-#' written to the cache, ledger or generated scripts.
+#' Backend for a live REDCap server
+#'
+#' Wraps the REDCap API. The token is held privately and never written to the cache, ledger or scripts.
+#'
+#' @section Methods:
+#' `$new(url, token)`, `$info()`, `$metadata()`, `$events()`, `$mapping()`, `$repeating()`, `$records(records)`, `$logging(begin)`, `$user_rights()`, `$import(df)`, `$drw(action, payload, prefix)` (calls the CDMSTAT DRW External Module).
+#' @format An [R6::R6Class] generator.
+#' @usage NULL
+#' @export
 RedcapBackend <- R6::R6Class("RedcapBackend",
   public = list(
     url = NULL,
@@ -64,8 +71,15 @@ RedcapBackend <- R6::R6Class("RedcapBackend",
   private = list(token = NULL)
 )
 
-#' Offline backend that behaves like a REDCap project, persisted to a file so
-#' that several processes (Shiny, plumber) share the same simulated server.
+#' Simulated REDCap backend
+#'
+#' A file-backed stand-in for a REDCap project, including a simulator of the CDMSTAT DRW External Module, used by [cdmstat_demo()] and the tests.
+#'
+#' @section Methods:
+#' The [RedcapBackend] methods plus `$edit(record, field, value, event)`, `$add_record(record, values)`, `$delete_record(record)` and `$change_metadata(field, column, value)` to simulate activity in REDCap.
+#' @format An [R6::R6Class] generator.
+#' @usage NULL
+#' @export
 DemoBackend <- R6::R6Class("DemoBackend",
   public = list(
     path = NULL,
@@ -117,6 +131,10 @@ DemoBackend <- R6::R6Class("DemoBackend",
       idx <- which(st$records$record_id == record & st$records$redcap_event_name == event &
                      is_blank(st$records$redcap_repeat_instrument))
       if (!length(idx)) stop("No such record/event: ", record, " / ", event)
+      form <- st$metadata$form_name[match(sub("___.*$", "", field), st$metadata$field_name)]
+      if (!is.null(st$edc_locks) && any(st$edc_locks$record == record & st$edc_locks$event == event & st$edc_locks$form_name == form)) {
+        stop("Form '", form, "' is locked in REDCap for record ", record, " (", event, ").", call. = FALSE)
+      }
       st$records[idx, field] <- as.character(value)
       st$log <- private$log_row(st$log, user, sprintf("Update record %s (%s)", record, event),
                                 sprintf("%s = '%s'", field, value))
@@ -161,10 +179,17 @@ DemoBackend <- R6::R6Class("DemoBackend",
   )
 )
 
-#' Resolve a REDCap API token without hard-coding it in scripts.
+#' Resolve a REDCap API token without hard-coding it in scripts
 #'
 #' Order: explicit `token` (discouraged), environment variable, then the OS
 #' keyring via the 'keyring' package (the same store 'rccola' uses).
+#'
+#' @param token API token. Discouraged: prefer `token_env` or `keyring_service` so tokens never appear in code.
+#' @param token_env Name of the environment variable holding the API token.
+#' @param keyring_service Service name in the OS keyring (the store used by 'keyring' and 'rccola') holding the token.
+#' @param keyring_user User name for the keyring entry.
+#' @return The token string.
+#' @export
 resolve_token <- function(token = NULL, token_env = "REDCAP_API_TOKEN", keyring_service = NULL,
                           keyring_user = NULL) {
   if (!is.null(token)) {
@@ -179,14 +204,15 @@ resolve_token <- function(token = NULL, token_env = "REDCAP_API_TOKEN", keyring_
   stop("No REDCap API token found. Set ", token_env, " or supply keyring_service.", call. = FALSE)
 }
 
-#' Backend for any study available as a CDISC ODM 1.3 export (REDCap Cloud,
-#' OpenClinica, Medidata Rave, Castor, REDCap itself ...).
+#' Backend for a CDISC ODM source
 #'
-#' `fetch` is a function returning the ODM XML text. ODM snapshots have no
-#' change log, so the backend keeps a hash of every subject and reports the
-#' subjects whose data changed (or disappeared) since the previous read, in
-#' the same shape as the REDCap logging export. Incremental sync, the query
-#' ledger and auto-resolution therefore work unchanged.
+#' Reads a CDISC ODM 1.3 export from any EDC system. Subjects whose data changed between reads are reported in the shape of the REDCap log, so incremental sync works unchanged.
+#'
+#' @section Methods:
+#' `$new(fetch, state_path)` where `fetch` is a file path or a function returning ODM text; then the [RedcapBackend] read methods.
+#' @format An [R6::R6Class] generator.
+#' @usage NULL
+#' @export
 OdmBackend <- R6::R6Class("OdmBackend",
   public = list(
     fetch = NULL, state_path = NULL, label = "ODM",
@@ -238,14 +264,15 @@ OdmBackend <- R6::R6Class("OdmBackend",
   )
 )
 
-#' Backend for REDCap Cloud (nPhase).
+#' Backend for REDCap Cloud
 #'
-#' REDCap Cloud is a separate commercial EDC whose REST API is documented
-#' inside each customer's account rather than publicly, so every path and the
-#' authentication header are configurable. Data are exchanged as CDISC ODM,
-#' which REDCap Cloud exports and imports. Set `export_path` (and optionally
-#' `import_path`) to the study ODM endpoints given in your REDCap Cloud API
-#' documentation; `{study}` is replaced by `study`.
+#' Pulls a REDCap Cloud (nPhase) study as CDISC ODM through its REST API, with configurable endpoint paths and authentication header.
+#'
+#' @section Methods:
+#' `$new(base_url, study, token, state_path, export_path, import_path, auth_header, auth_prefix)`, `$request(method, path, body)`, `$import(df)`.
+#' @format An [R6::R6Class] generator.
+#' @usage NULL
+#' @export
 RedcapCloudBackend <- R6::R6Class("RedcapCloudBackend", inherit = OdmBackend,
   public = list(
     base_url = NULL, study = NULL, export_path = NULL, import_path = NULL,
@@ -272,7 +299,7 @@ RedcapCloudBackend <- R6::R6Class("RedcapCloudBackend", inherit = OdmBackend,
       req <- httr2::req_timeout(req, 300)
       httr2::resp_body_string(httr2::req_perform(req))
     },
-    #' Write values back as an ODM ClinicalData upsert.
+    # Write values back as an ODM ClinicalData upsert.
     import = function(df) {
       if (is.null(self$import_path)) stop("Set import_path to enable write-back to REDCap Cloud.", call. = FALSE)
       st <- self$read()

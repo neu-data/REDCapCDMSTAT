@@ -50,6 +50,9 @@ class CDMSTATDRW extends AbstractExternalModule
         'add-comment' => 'respond',
         'verify-field' => 'verify',
         'deverify-field' => 'verify',
+        'lock-form' => null,
+        'unlock-form' => null,
+        'list-locks' => null,
     ];
 
     public function redcap_module_api($action, $payload, $project_id, $user_id, $format, $returnFormat, $csvDelim)
@@ -68,6 +71,16 @@ class CDMSTATDRW extends AbstractExternalModule
             $project_id = (int)$project_id;
             if ($action === 'drw-status') {
                 return $this->ok($this->status($project_id, $user_id));
+            }
+            if (in_array($action, ['lock-form', 'unlock-form', 'list-locks'], true)) {
+                $this->assertLockReady($project_id, $user_id, $action !== 'list-locks');
+                if ($action === 'lock-form') {
+                    return $this->ok($this->lockForm($project_id, $user_id, $payload));
+                }
+                if ($action === 'unlock-form') {
+                    return $this->ok($this->unlockForm($project_id, $user_id, $payload));
+                }
+                return $this->ok($this->listLocks($project_id, $payload));
             }
             $this->assertReady($project_id, $user_id, self::ACTION_NEEDS[$action]);
             switch ($action) {
@@ -128,6 +141,8 @@ class CDMSTATDRW extends AbstractExternalModule
             'user' => $username,
             'rights_level' => $level,
             'capabilities' => $caps,
+            'lock_right' => $this->safely(function () use ($project_id, $username) { return $this->lockRight($project_id, $username); }),
+            'locking_schema_ok' => empty(array_diff(self::LOCK_COLUMNS, $this->tableColumns('redcap_locking_data'))),
         ];
     }
 
@@ -387,6 +402,114 @@ class CDMSTATDRW extends AbstractExternalModule
         return ['status_id' => $status_id, 'res_id' => $res_id, 'query_status' => $status];
     }
 
+
+    // ---- form locking --------------------------------------------------------
+
+    const LOCK_COLUMNS = ['ld_id', 'project_id', 'record', 'event_id', 'form_name', 'instance', 'username', 'timestamp'];
+
+    protected function assertLockReady($project_id, $username, $write)
+    {
+        $have = $this->tableColumns('redcap_locking_data');
+        $missing = array_values(array_diff(self::LOCK_COLUMNS, $have));
+        if (!empty($missing)) {
+            throw new ApiException('Unexpected locking schema; refusing to write. Missing: redcap_locking_data.' . implode(', redcap_locking_data.', $missing), 501);
+        }
+        if (!$write) {
+            return;
+        }
+        if ($this->rightsLevel($project_id, $username) !== 'superuser' && $this->lockRight($project_id, $username) < 1) {
+            throw new ApiException("User '$username' lacks the Record Locking right.", 403);
+        }
+        $allowed = trim((string)$this->getProjectSetting('allowed-usernames', $project_id));
+        if ($allowed !== '' && !in_array($username, array_map('trim', explode(',', $allowed)), true)) {
+            throw new ApiException("User '$username' is not allowed to write through this module.", 403);
+        }
+    }
+
+    protected function lockRight($project_id, $username)
+    {
+        $row = $this->one(
+            'select u.lock_record as own, r.lock_record as role
+               from redcap_user_rights u left join redcap_user_roles r on r.role_id = u.role_id
+              where u.project_id = ? and u.username = ?',
+            [$project_id, $username]
+        );
+        if ($row === null) {
+            return 0;
+        }
+        return (int)($row['role'] !== null ? $row['role'] : $row['own']);
+    }
+
+    protected function formTarget($project_id, $payload)
+    {
+        $record = $this->requireText($payload, 'record');
+        $form = $this->requireText($payload, 'form');
+        if ($this->one('select form_name from redcap_metadata where project_id = ? and form_name = ? limit 1', [$project_id, $form]) === null) {
+            throw new ApiException("Form '$form' is not in this project.", 400);
+        }
+        $event = trim((string)($payload['event'] ?? ''));
+        $event_id = $event === '' ? $this->firstEventId($project_id) : $this->eventIdFor($project_id, $event);
+        if (empty($event_id)) {
+            throw new ApiException("Unknown event '$event'.", 400);
+        }
+        if (!$this->recordExists($project_id, $record)) {
+            throw new ApiException("Record '$record' does not exist.", 404);
+        }
+        return [$record, (int)$event_id, $form, max(1, (int)($payload['instance'] ?? 1))];
+    }
+
+    public function lockForm($project_id, $username, $payload)
+    {
+        [$record, $event_id, $form, $instance] = $this->formTarget($project_id, $payload);
+        $existing = $this->one('select ld_id from redcap_locking_data where project_id = ? and record = ? and event_id = ? and form_name = ? and instance = ?',
+            [$project_id, $record, $event_id, $form, $instance]);
+        if ($existing !== null) {
+            return ['locked' => true, 'already_locked' => true, 'ld_id' => (int)$existing['ld_id']];
+        }
+        $this->query('insert into redcap_locking_data (project_id, record, event_id, form_name, instance, username, timestamp) values (?, ?, ?, ?, ?, ?, ?)',
+            [$project_id, $record, $event_id, $form, $instance, $username, $this->now()]);
+        $id = $this->lastInsertId();
+        $actor = trim((string)($payload['actor'] ?? ''));
+        $reason = trim((string)($payload['reason'] ?? ''));
+        $this->audit($project_id, $record, $event_id, 'Lock form',
+            "form = $form, instance = $instance" . ($actor !== '' ? ", by CDMSTAT user $actor" : '') . ($reason !== '' ? ", reason: $reason" : ''));
+        return ['locked' => true, 'already_locked' => false, 'ld_id' => $id];
+    }
+
+    public function unlockForm($project_id, $username, $payload)
+    {
+        [$record, $event_id, $form, $instance] = $this->formTarget($project_id, $payload);
+        $reason = $this->requireText($payload, 'reason');
+        $q = $this->createQuery();
+        $q->add('delete from redcap_locking_data where project_id = ? and record = ? and event_id = ? and form_name = ? and instance = ?',
+            [$project_id, $record, $event_id, $form, $instance]);
+        $q->execute();
+        $n = (int)$q->affected_rows;
+        $actor = trim((string)($payload['actor'] ?? ''));
+        if ($n > 0) {
+            $this->audit($project_id, $record, $event_id, 'Unlock form',
+                "form = $form, instance = $instance" . ($actor !== '' ? ", by CDMSTAT user $actor" : '') . ", reason: $reason");
+        }
+        return ['unlocked' => $n > 0];
+    }
+
+    public function listLocks($project_id, $payload)
+    {
+        $sql = 'select record, event_id, form_name, instance, username, timestamp from redcap_locking_data where project_id = ?';
+        $params = [$project_id];
+        if (!empty($payload['record'])) {
+            $sql .= ' and record = ?';
+            $params[] = (string)$payload['record'];
+        }
+        $res = $this->query($sql . ' order by record, event_id, form_name', $params);
+        $out = [];
+        while ($r = $res->fetch_assoc()) {
+            $r['event'] = $this->uniqueEventName($project_id, (int)$r['event_id']);
+            $out[] = $r;
+        }
+        return ['locks' => $out];
+    }
+
     // ---- helpers -----------------------------------------------------------
 
     protected function target($project_id, $payload)
@@ -437,6 +560,16 @@ class CDMSTATDRW extends AbstractExternalModule
             return "[CDMSTAT: $actor] $comment";
         }
         return $comment;
+    }
+
+    // Status reporting must not fail because an optional feature is missing.
+    protected function safely(callable $fn)
+    {
+        try {
+            return $fn();
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     protected function requireText($payload, $key)

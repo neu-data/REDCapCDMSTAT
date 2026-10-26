@@ -35,6 +35,8 @@ Suggests:
     plumber,
     keyring,
     survival,
+    lme4,
+    markdown,
     knitr,
     rmarkdown,
     quarto,
@@ -44,7 +46,9 @@ Suggests:
     httpuv,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE, r6 = FALSE)
 Collate:
+    'REDCapCDMSTAT-package.R'
     'utils.R'
     'logic.R'
     'data.R'
@@ -60,4 +64,6 @@ Collate:
     'cdms.R'
     'cdisc.R'
     'drw.R'
+    'portfolio.R'
     'launch.R'
+Config/roxygen2/version: 8.0.0

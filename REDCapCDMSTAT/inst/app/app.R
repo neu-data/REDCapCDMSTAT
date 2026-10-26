@@ -126,9 +126,9 @@ ui <- page_navbar(
       nav_panel("Model builder",
         layout_columns(col_widths = c(6, 3, 3),
           textInput("m_formula", "Formula (wide + collapsed data)", "sbp__week_24 ~ arm + sbp__baseline + age"),
-          selectInput("m_type", "Model", c("linear", "logistic", "cox")),
+          selectInput("m_type", "Model", c("linear", "logistic", "cox", "mixed", "mixed_logistic")),
           actionButton("m_run", "Fit", icon = icon("play"), class = "btn-primary mt-4")),
-        helpText("Cox example: Surv(followup_days, event_occurred == 'Yes') ~ arm + age. Logistic example: any_ae_serious ~ arm."),
+        helpText("Cox: Surv(followup_days, event_occurred == 'Yes') ~ arm + age. Logistic: any_ae_serious ~ arm. Mixed (repeated measures on long data): sbp ~ arm * redcap_event_name + (1 | record_id)."),
         verbatimTextOutput("m_info"), DTOutput("m_tbl"))
     )
   ),
@@ -222,10 +222,11 @@ ui <- page_navbar(
     nav_panel("CDISC export",
       layout_columns(col_widths = c(3, 9),
         card(card_header("Export"), downloadButton("cdisc_zip", "Download SDTM + ODM (.zip)"),
-             helpText("DM, VS, LB and AE domains (CSV and SAS .xpt) plus the full study as CDISC ODM 1.3. AEDECOD comes from the coding module.")),
+             helpText("DM, VS, LB, AE, SV and DS domains (CSV and SAS .xpt), define.xml, and the full study as CDISC ODM 1.3. AEDECOD comes from the coding module.")),
         navset_card_tab(
           nav_panel("DM", DTOutput("sd_dm")), nav_panel("VS", DTOutput("sd_vs")),
-          nav_panel("LB", DTOutput("sd_lb")), nav_panel("AE", DTOutput("sd_ae"))))),
+          nav_panel("LB", DTOutput("sd_lb")), nav_panel("AE", DTOutput("sd_ae")),
+          nav_panel("SV", DTOutput("sd_sv")), nav_panel("DS", DTOutput("sd_ds"))))),
     nav_panel("Activity trail", card(card_header("All CDMS actions (append-only)"), DTOutput("act_tbl")))
   ),
   nav_spacer(),
@@ -234,6 +235,10 @@ ui <- page_navbar(
 )
 
 server <- function(input, output, session) {
+  # Each browser session gets its own engine object, so choosing a data cut
+  # to analyse affects only that user. Cache, ledger and backend are shared:
+  # writes reach other sessions through the file poll below.
+  nx <- nx$clone()
   actor <- session$user %||% nx$actor
   output$whoami <- renderText(paste("Signed in as", actor))
   bump <- reactiveVal(0)
@@ -448,7 +453,11 @@ server <- function(input, output, session) {
   output$tr_tbl <- renderDT(dt(transform(tr(), mean = round(mean, 2), sd = round(sd, 2), se = round(se, 2),
                                          lower = round(lower, 2), upper = round(upper, 2))))
   fit <- eventReactive(input$m_run, notify_err(nx$fit(input$m_formula, input$m_type)))
-  output$m_info <- renderText({ f <- fit(); req(f); sprintf("%s model, n = %s", attr(f, "type"), attr(f, "n")) })
+  output$m_info <- renderText({
+    f <- fit(); req(f)
+    paste0(sprintf("%s model, n = %s", attr(f, "type"), attr(f, "n")),
+           if (!is.null(attr(f, "groups"))) sprintf(", %s subjects; p-values: %s", attr(f, "groups")[1], attr(f, "p_method")) else "")
+  })
   output$m_tbl <- renderDT({ f <- fit(); req(f); f[] <- lapply(f, function(v) if (is.numeric(v)) signif(v, 4) else v); dt(f) })
 
   # ---- Cuts
@@ -553,6 +562,8 @@ server <- function(input, output, session) {
   output$sd_vs <- renderDT(dt(sdtm()$VS))
   output$sd_lb <- renderDT(dt(sdtm()$LB))
   output$sd_ae <- renderDT(dt(sdtm()$AE))
+  output$sd_sv <- renderDT(dt(sdtm()$SV))
+  output$sd_ds <- renderDT(dt(sdtm()$DS))
   output$cdisc_zip <- downloadHandler(filename = function() sprintf("cdisc_%s.zip", format(Sys.Date())), content = function(file) {
     d <- tempfile("cdisc")
     f <- nx$export_cdisc(d)

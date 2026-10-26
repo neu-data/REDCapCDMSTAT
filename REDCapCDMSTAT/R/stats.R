@@ -1,4 +1,10 @@
-#' Find the randomisation / treatment-arm field from the data dictionary.
+#' Find the randomisation / treatment-arm field from the data dictionary
+#'
+#' @param md Data dictionary (REDCap metadata export) as a data frame.
+#' @return Field name, or `NA` if none is found.
+#' @examples
+#' detect_arm(demo_project(n = 5)$metadata)
+#' @export
 detect_arm <- function(md) {
   cand <- md[md$field_type %in% c("radio", "dropdown"), , drop = FALSE]
   hit <- cand$field_name[
@@ -8,7 +14,16 @@ detect_arm <- function(md) {
 }
 
 #' Candidate baseline variables: analysable fields on forms collected at the
+#'
 #' first event, excluding identifiers, dates, free text and the arm itself.
+#'
+#' @param md Data dictionary (REDCap metadata export) as a data frame.
+#' @param mapping Form-event mapping (columns `unique_event_name`, `form`); `NULL` for classic projects.
+#' @param first_event Unique name of the first (baseline) event.
+#' @param id_field Name of the record ID field; defaults to the first dictionary field.
+#' @param arm Name of the treatment-arm field, excluded from the baseline variables.
+#' @return Character vector of field names.
+#' @export
 baseline_vars <- function(md, mapping = NULL, first_event = NULL, id_field = md$field_name[1], arm = detect_arm(md)) {
   forms <- if (!is.null(mapping) && nrow(mapping) && !is.null(first_event)) {
     mapping$form[mapping$unique_event_name == first_event]
@@ -38,6 +53,8 @@ check_normal <- function(groups, alpha = 0.05) {
 
 fmt_p <- function(p) if (is.na(p)) "" else format.pval(p, digits = 2, eps = 0.001)
 
+#' Baseline characteristics table with guarded test selection
+#'
 #' Baseline characteristics table with guarded test selection.
 #'
 #' In "exploratory" mode continuous variables are tested for normality within
@@ -46,6 +63,16 @@ fmt_p <- function(p) if (is.na(p)) "" else format.pval(p, digits = 2, eps = 0.00
 #' variables use chi-squared unless an expected cell count is below 5, then
 #' Fisher's exact test. In "sap" mode the tests in `tests` are pre-specified
 #' and enforced instead, as a confirmatory analysis requires.
+#'
+#' @param data Typed data frame (see [type_data()]) or a shaped analysis data frame.
+#' @param vars Variables to summarise.
+#' @param by Grouping column, usually the randomised arm.
+#' @param md Data dictionary (REDCap metadata export) as a data frame.
+#' @param tests Named list of pre-specified tests (`"t.test"`, `"anova"`, `"wilcox"`, `"kruskal"`, `"chisq"`, `"fisher"`).
+#' @param mode `"exploratory"` chooses tests from the data; `"sap"` requires every test to be pre-specified in `tests`.
+#' @param alpha Significance level of the Shapiro-Wilk normality check.
+#' @return Data frame with one row per variable or level, a column per group, `Overall`, `p_value`, `test` and `rationale`.
+#' @export
 table_one <- function(data, vars, by = NULL, md = NULL, tests = list(), mode = c("exploratory", "sap"),
                       alpha = 0.05) {
   mode <- match.arg(mode)
@@ -142,7 +169,17 @@ table_one <- function(data, vars, by = NULL, md = NULL, tests = list(), mode = c
 }
 
 #' Flag statistical outliers (|z| above a threshold, or Tukey IQR fences),
+#'
 #' optionally within groups such as visit events.
+#'
+#' @param data Typed data frame (see [type_data()]) or a shaped analysis data frame.
+#' @param field Name of the field to analyse.
+#' @param id_field Name of the record ID field; defaults to the first dictionary field.
+#' @param method Outlier rule: `"z"` (robust z-score from median and MAD) or `"iqr"` (Tukey fences).
+#' @param threshold Flagging threshold; defaults to 3 for `"z"` and 1.5 for `"iqr"`.
+#' @param group Column within which scores are computed, by default the event.
+#' @return Data frame with `record_id`, `event`, `field`, `value`, `score` and `outlier`.
+#' @export
 detect_outliers <- function(data, field, id_field = names(data)[1], method = c("z", "iqr"), threshold = NULL,
                             group = if ("redcap_event_name" %in% names(data)) "redcap_event_name" else NULL) {
   method <- match.arg(method)
@@ -173,7 +210,14 @@ detect_outliers <- function(data, field, id_field = names(data)[1], method = c("
              field = field, value = x, score = round(score, 2), outlier = flag, stringsAsFactors = FALSE)
 }
 
-#' Mean, SD, SE and 95% CI of a field per event and group.
+#' Mean, SD, SE and 95% CI of a field per event and group
+#'
+#' @param data Typed data frame (see [type_data()]) or a shaped analysis data frame.
+#' @param field Name of the field to analyse.
+#' @param by Grouping column, usually the randomised arm.
+#' @param event_order Event names in schedule order.
+#' @return Data frame with `event`, `group`, `n`, `mean`, `sd`, `se`, `lower` and `upper`.
+#' @export
 trend_summary <- function(data, field, by = NULL, event_order = NULL) {
   x <- suppressWarnings(as.numeric(data[[field]]))
   ev <- as.character(data$redcap_event_name %||% rep("all", nrow(data)))
@@ -193,10 +237,45 @@ trend_summary <- function(data, field, by = NULL, event_order = NULL) {
   res[order(res$group, res$event), , drop = FALSE]
 }
 
-#' Fit a linear, logistic or Cox model and return a tidy coefficient table.
-fit_model <- function(formula, data, type = c("linear", "logistic", "cox")) {
+#' Fit a model and return a tidy coefficient table
+#'
+#' Types: "linear" (lm), "logistic" (glm), "cox" (survival::coxph), and for
+#' repeated measures on long data "mixed" (lme4::lmer) and
+#' "mixed_logistic" (lme4::glmer), e.g.
+#' `sbp ~ arm * redcap_event_name + (1 | record_id)`. Mixed-model p-values
+#' use the Wald normal approximation.
+#'
+#' @param formula Model formula as a string.
+#' @param data Typed data frame (see [type_data()]) or a shaped analysis data frame.
+#' @param type Model type: `"linear"`, `"logistic"`, `"cox"`, `"mixed"` or `"mixed_logistic"`.
+#' @return Coefficient table with estimates, standard errors, 95% CIs, p-values and (for logistic and Cox models) odds or hazard ratios. Attributes hold `n`, `type` and, for mixed models, `groups`, `random_effects` and `p_method`.
+#' @export
+fit_model <- function(formula, data, type = c("linear", "logistic", "cox", "mixed", "mixed_logistic")) {
   type <- match.arg(type)
   f <- stats::as.formula(formula)
+  if (type %in% c("mixed", "mixed_logistic")) {
+    if (!requireNamespace("lme4", quietly = TRUE)) stop("Install 'lme4' for mixed models.", call. = FALSE)
+    if (!any(grepl("|", deparse(f), fixed = TRUE))) stop("A mixed model needs a random effect, e.g. + (1 | record_id).", call. = FALSE)
+    m <- if (type == "mixed") lme4::lmer(f, data = data) else lme4::glmer(f, data = data, family = stats::binomial())
+    s <- summary(m)$coefficients
+    est <- s[, 1]
+    se <- s[, 2]
+    p <- 2 * stats::pnorm(-abs(est / se))
+    out <- data.frame(term = rownames(s), estimate = est, std_error = se, conf_low = est - 1.96 * se,
+                      conf_high = est + 1.96 * se, p_value = p, stringsAsFactors = FALSE, row.names = NULL)
+    if (type == "mixed_logistic") {
+      out$odds_ratio <- exp(out$estimate)
+      out$ratio_low <- exp(out$conf_low)
+      out$ratio_high <- exp(out$conf_high)
+    }
+    vc <- as.data.frame(lme4::VarCorr(m))
+    attr(out, "n") <- stats::nobs(m)
+    attr(out, "groups") <- lme4::ngrps(m)
+    attr(out, "random_effects") <- vc[, intersect(c("grp", "var1", "var2", "vcov", "sdcor"), names(vc))]
+    attr(out, "type") <- type
+    attr(out, "p_method") <- "Wald z"
+    return(out)
+  }
   m <- switch(type,
     linear = stats::lm(f, data = data),
     logistic = stats::glm(f, data = data, family = stats::binomial()),

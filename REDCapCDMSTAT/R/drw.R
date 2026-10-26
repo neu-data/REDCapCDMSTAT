@@ -111,6 +111,30 @@ DemoBackend$set("public", "drw", function(action, payload = list(), prefix = "cd
       rid <- add_res(sid, requested, response, p("comment"), new)
       save(list(status_id = sid, res_id = rid, query_status = new))
     },
+    "lock-form" = , "unlock-form" = , "list-locks" = {
+      locks <- st$edc_locks %||% data.frame(record = character(), event = character(), form_name = character(),
+                                            instance = integer(), username = character(), timestamp = character(),
+                                            stringsAsFactors = FALSE)
+      if (action == "list-locks") {
+        l <- if (nzchar(p("record"))) locks[locks$record == p("record"), , drop = FALSE] else locks
+        return(list(locks = l))
+      }
+      if (!nzchar(p("record")) || !nzchar(p("form"))) fail("record and form are required.")
+      if (!p("form") %in% st$metadata$form_name) fail(sprintf("Form '%s' is not in this project.", p("form")))
+      ev <- if (nzchar(p("event"))) p("event") else st$events$unique_event_name[1]
+      inst <- max(1L, suppressWarnings(as.integer(p("instance", "1"))), na.rm = TRUE)
+      hit <- which(locks$record == p("record") & locks$event == ev & locks$form_name == p("form") & locks$instance == inst)
+      if (action == "lock-form") {
+        if (length(hit)) return(list(locked = TRUE, already_locked = TRUE))
+        st$edc_locks <- rbind(locks, data.frame(record = p("record"), event = ev, form_name = p("form"), instance = inst,
+                                                username = user, timestamp = now_stamp(), stringsAsFactors = FALSE))
+        private$save(st)
+        return(list(locked = TRUE, already_locked = FALSE))
+      }
+      if (!nzchar(p("reason"))) fail("reason is required.")
+      if (length(hit)) { st$edc_locks <- locks[-hit, , drop = FALSE]; private$save(st) }
+      list(unlocked = length(hit) > 0)
+    },
     "verify-field" = , "deverify-field" = {
       t <- target()
       new <- if (action == "verify-field") "VERIFIED" else "DEVERIFIED"
@@ -138,16 +162,24 @@ CDMSTAT$set("public", "drw_status", function(prefix = NULL) {
   self$backend$drw("drw-status", list(), prefix = prefix %||% cfg$prefix %||% "cdmstat_drw")
 })
 
-#' Turn on DRW write-back after checking the module is installed, the DRW is
-#' enabled in the project and the token user may open and close queries.
-CDMSTAT$set("public", "drw_enable", function(prefix = "cdmstat_drw", actor = self$actor) {
+# Turn on DRW write-back after checking the module is installed, the DRW is
+# enabled in the project and the token user may open and close queries.
+# @param verify_sdv also mark field values verified in the DRW when SDV units
+#   are verified in CDMSTAT.
+# @param lock_in_edc also lock forms in REDCap when CDMSTAT locks a record or
+#   form, so the EDC itself refuses edits (needs the Record Locking right).
+CDMSTAT$set("public", "drw_enable", function(prefix = "cdmstat_drw", verify_sdv = TRUE, lock_in_edc = TRUE, actor = self$actor) {
   s <- self$drw_status(prefix)
   if (!isTRUE(s$drw_enabled)) stop("The Data Resolution Workflow is not enabled in this REDCap project.", call. = FALSE)
   if (!isTRUE(s$schema_ok)) stop("The module reports an unexpected DRW schema: ", paste(unlist(s$missing_columns), collapse = ", "), call. = FALSE)
   if (!identical(s$rights_level, "superuser") && !identical(as.integer(s$rights_level), 3L)) {
     stop("The API token user needs the DRW right 'Open, close, and respond to queries' (level 3); has ", s$rights_level, ".", call. = FALSE)
   }
-  self$ledger$set_setting("drw", list(enabled = TRUE, prefix = prefix, last_max_res_id = 0L), actor)
+  if (lock_in_edc && !identical(s$rights_level, "superuser") && !isTRUE(as.integer(s$lock_right %||% 1L) >= 1L)) {
+    stop("lock_in_edc needs the Record Locking user right for the API token user.", call. = FALSE)
+  }
+  self$ledger$set_setting("drw", list(enabled = TRUE, prefix = prefix, last_max_res_id = 0L,
+                                      verify_sdv = verify_sdv, lock_in_edc = lock_in_edc), actor)
   self$ledger$activity(actor, "drw", "enable", sprintf("module %s, token user %s", prefix, s$user))
   invisible(s)
 })
@@ -162,7 +194,7 @@ CDMSTAT$set("public", "drw_disable", function(actor = self$actor) {
 
 CDMSTAT$set("public", "drw_links", function() self$ledger$get("SELECT * FROM drw_link ORDER BY synced_at DESC"))
 
-#' Push ledger changes to the DRW and pull site activity back.
+# Push ledger changes to the DRW and pull site activity back.
 CDMSTAT$set("public", "drw_sync", function(actor = self$actor) {
   private$need_backend()
   cfg <- self$ledger$get_setting("drw", list())

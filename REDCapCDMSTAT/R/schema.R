@@ -1,11 +1,20 @@
-#' Hash a data dictionary so drift can be detected cheaply.
+#' Hash a data dictionary so drift can be detected cheaply
+#'
+#' @param md Data dictionary (REDCap metadata export) as a data frame.
+#' @return SHA-256 hash string.
+#' @export
 dict_hash <- function(md) {
   md <- as.data.frame(md, stringsAsFactors = FALSE)
   rownames(md) <- NULL
   digest::digest(md, algo = "sha256")
 }
 
-#' Describe what changed between two data dictionaries.
+#' Describe what changed between two data dictionaries
+#'
+#' @param old Previous data dictionary.
+#' @param new Current data dictionary.
+#' @return List with `added`, `removed` and `changed` (per field, the changed columns with old and new values).
+#' @export
 dict_diff <- function(old, new) {
   added <- setdiff(new$field_name, old$field_name)
   removed <- setdiff(old$field_name, new$field_name)

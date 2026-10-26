@@ -69,6 +69,9 @@ All actions need a project token and `returnFormat=json`.
 | `reopen-query` | `status_id`, `comment`, `actor` | open |
 | `add-comment` | `status_id`, `comment`, `actor` | respond |
 | `verify-field` / `deverify-field` | `record`, `field`, plus optional `event`, `instance`, `repeat_instrument`, `comment` (required to de-verify) | open, close and respond |
+| `lock-form` | `record`, `form`, plus optional `event`, `instance`, `reason`, `actor` | Record Locking right |
+| `unlock-form` | `record`, `form`, `reason`, plus optional `event`, `instance`, `actor` | Record Locking right |
+| `list-locks` | optional `record` | any |
 
 `open-query` is idempotent: if the field already has an open query, it
 returns that query's `status_id`.
@@ -100,6 +103,12 @@ after lock") stay CDMSTAT-only.
   `redcap_data_quality_resolutions` have the expected columns. If a REDCap
   upgrade changes them, it returns HTTP 501 and refuses to write.
   `drw-status` lists anything missing.
+- **Locking.** `lock-form` and `unlock-form` write REDCap's own form locks
+  (`redcap_locking_data`). REDCap then refuses edits to that form, exactly
+  as when a user clicks "Lock" on the form. The same schema guard applies.
+  E-signatures are not written into REDCap, because REDCap's e-signature
+  requires the signer's own REDCap password; CDMSTAT keeps its own
+  hash-bound signatures.
 - **Rights.** Each action is checked against the token user's
   `data_quality_resolution` right; a role assignment takes precedence over
   individual rights. Superusers are allowed.
@@ -114,10 +123,10 @@ after lock") stay CDMSTAT-only.
 php tests/run_tests.php
 ```
 
-The 34 checks run against a stub framework and an SQLite copy of the DRW
+The 44 checks run against a stub framework and an SQLite copy of the DRW
 tables. They cover the lifecycle, idempotency, rights levels, role overrides,
-the allowed-users setting, the schema guard, verification rules and
-attribution. Before production use, test on a development REDCap copy of
+the allowed-users setting, the schema guard, verification rules,
+attribution and form locking. Before production use, test on a development REDCap copy of
 your project. The module writes the same tables as the DRW pop-up, so
 confirm in the pop-up that threads display as expected on your REDCap
 version.

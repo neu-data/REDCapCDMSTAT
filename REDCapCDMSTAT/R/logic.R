@@ -2,7 +2,15 @@
 # from the current data dictionary every time they are evaluated, so a change
 # to the dictionary online is picked up on the next sync with no code edits.
 
+#' Translate REDCap logic to R
+#'
 #' Translate a REDCap logic / calculation string into an R expression string.
+#'
+#' @param logic REDCap logic or calculation, e.g. `"[sex] = '2' and [age] >= 18"`.
+#' @return An R expression as a string.
+#' @examples
+#' translate_logic("[sex] = '2' and [weight] <> ''")
+#' @export
 translate_logic <- function(logic) {
   x <- logic
   store <- character()
@@ -101,11 +109,17 @@ logic_env <- function(data, full, id_field) {
   env
 }
 
-#' Evaluate REDCap logic row-wise on a data frame.
+#' Evaluate REDCap logic row-wise on a data frame
 #'
+#' @param logic REDCap logic or calculation, e.g. `"[sex] = '2' and [age] >= 18"`.
 #' @param data rows to evaluate (typed data).
 #' @param full the full data set, used for cross-event references.
-#' @return a vector with one value per row (NA where it cannot be evaluated).
+#' @param id_field Name of the record ID field; defaults to the first dictionary field.
+#' @return Vector with one value per row of `data` (NA where it cannot be evaluated).
+#' @examples
+#' d <- data.frame(record_id = c("1", "2"), sex = c("1", "2"), age = c(30, 15))
+#' eval_logic("[sex] = '2' and [age] < 18", d)
+#' @export
 eval_logic <- function(logic, data, full = NULL, id_field = names(data)[1]) {
   n <- nrow(data)
   if (is.null(logic) || is.na(logic) || !nzchar(trimws(logic))) return(rep(TRUE, n))

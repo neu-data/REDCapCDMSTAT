@@ -1,9 +1,17 @@
-#' Build a simulated longitudinal, randomised REDCap project.
+#' Build a simulated longitudinal, randomised REDCap project
 #'
 #' Two arms, three events, a repeating adverse-event form and deliberately
 #' planted data problems (range errors, a hidden field with data, a stale
 #' calculation, a missing required value, outliers) so that every part of the
 #' pipeline has something to find.
+#'
+#' @param seed Random seed.
+#' @param n Number of subjects.
+#' @return List with `info`, `metadata`, `events`, `mapping`, `repeating`, `records` and `log`.
+#' @examples
+#' p <- demo_project(n = 20)
+#' nrow(p$records)
+#' @export
 demo_project <- function(seed = 42, n = 120) {
   set.seed(seed)
   fld <- function(name, form, type, label, choices = "", vt = "", vmin = "", vmax = "",

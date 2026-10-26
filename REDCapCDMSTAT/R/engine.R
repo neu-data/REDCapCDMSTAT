@@ -1,10 +1,36 @@
-#' The REDCap CDMSTAT engine.
+#' The REDCap CDMSTAT engine
 #'
 #' One object holds the local cache, the live data dictionary, the query
-#' ledger and the analysis state. The Shiny app, the plumber API and the Quarto
-#' template are thin layers over the methods below. Analytic methods append the
-#' R call that reproduces them to the script log, so a session driven by
-#' clicks can be replayed as code with `$script()`.
+#' ledger and the analysis state. Create it with [cdmstat_connect()],
+#' [cdmstat_cloud()], [cdmstat_odm()], [cdmstat_demo()] or [cdmstat_open()].
+#'
+#' @section Methods:
+#' \describe{
+#' \item{Data}{`$sync(full)`, `$on_det(record, event, instrument)`, `$data()`, `$summary()`, `$reload_if_changed()`}
+#' \item{Data quality and queries}{`$validate()`, `$add_rule(id, logic, message, severity, field)`, `$remove_rule(id)`,
+#'   `$raise_queries()`, `$add_query(record_id, field, message, ...)`, `$queries(status)`,
+#'   `$transition_query(query_id, status, comment)`, `$comment_query(query_id, comment)`, `$query_audit(query_id)`, `$writeback(field)`}
+#' \item{REDCap Data Resolution Workflow}{`$drw_enable(prefix, verify_sdv, lock_in_edc)`, `$drw_sync()`, `$drw_status()`, `$drw_links()`, `$drw_disable()`}
+#' \item{Data cuts}{`$freeze(label, note)`, `$sign_off(cut_id, comment)`, `$cuts()`, `$use_cut(cut_id, require_signoff)`, `$active_cut()`}
+#' \item{Analysis}{`$shape(longitudinal, repeating, labels, log, carry_constant)`, `$variables()`, `$arm()`,
+#'   `$table_one(by, vars, event, tests, mode)`, `$outliers(field, method, threshold)`, `$trend(field, by)`, `$fit(formula, type, longitudinal, repeating)`}
+#' \item{Randomisation}{`$setup_randomization(strata, ratio, block_sizes, per_stratum, seed, arm_field)`, `$randomize(record_id)`, `$randomization_status()`}
+#' \item{Source data verification}{`$sdv_plan(critical_fields, first_n, sample_rate, seed)`, `$sdv_refresh()`, `$sdv_status(required_only)`, `$sdv_verify(unit_keys, comment)`}
+#' \item{Locking and signatures}{`$lock(record_id, reason, event, form)`, `$unlock(lock_id, reason)`, `$locks()`,
+#'   `$esign(record_id, meaning, identity_verified)`, `$signatures()`}
+#' \item{Medical coding}{`$load_dictionary(dict, name)`, `$dictionary(name)`, `$code_terms(field, dictionary)`, `$coding(status)`, `$approve_coding(coding_key, code)`}
+#' \item{Deviations and metrics}{`$log_deviation(record_id, category, description, severity, event)`, `$close_deviation(dev_id, comment)`,
+#'   `$deviations()`, `$check_visit_windows(anchor, visit_field, window)`, `$site_metrics()`, `$enrollment_curve(date_field)`, `$activity(module, n)`}
+#' \item{Export and reproducibility}{`$sdtm(map, studyid)`, `$export_cdisc(out_dir, map, studyid, xpt)`, `$script()`, `$log_code(code)`}
+#' }
+#' @format An [R6::R6Class] generator.
+#' @usage NULL
+#' @examples
+#' nx <- cdmstat_demo(dir = file.path(tempdir(), "cdmstat-ex"), reset = TRUE)
+#' nx$raise_queries()
+#' head(nx$queries()[, c("record_id", "field", "message")])
+#' nx$fit("sbp__week_24 ~ arm + sbp__baseline")
+#' @export
 CDMSTAT <- R6::R6Class("CDMSTAT",
   public = list(
     backend = NULL, ledger = NULL, dir = NULL, actor = NULL, connect_code = NULL,
@@ -28,10 +54,10 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
     event_order = function() self$events$unique_event_name %||% character(),
 
     # ---- Synchronisation -------------------------------------------------
-    #' Full pull on first use; afterwards only records named in the REDCap log
-    #' since the last sync are re-exported and patched into the cache. The
-    #' dictionary is re-checked on every sync because a design change does
-    #' not fire a Data Entry Trigger.
+    # Full pull on first use; afterwards only records named in the REDCap log
+    # since the last sync are re-exported and patched into the cache. The
+    # dictionary is re-checked on every sync because a design change does
+    # not fire a Data Entry Trigger.
     sync = function(full = FALSE) {
       private$need_backend()
       t0 <- Sys.time()
@@ -62,7 +88,7 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
       invisible(res)
     },
 
-    #' Handle a REDCap Data Entry Trigger: re-export just that record.
+    # Handle a REDCap Data Entry Trigger: re-export just that record.
     on_det = function(record, event = NULL, instrument = NULL) {
       private$need_backend()
       t0 <- Sys.time()
@@ -73,7 +99,7 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
       invisible(list(mode = "det", record = record, event = event, instrument = instrument))
     },
 
-    #' Reload the cache if another process (e.g. the API) updated it.
+    # Reload the cache if another process (e.g. the API) updated it.
     reload_if_changed = function() {
       f <- file.path(self$dir, "cache.rds")
       if (file.exists(f) && !identical(file.mtime(f), private$cache_mtime)) private$load_cache()
@@ -130,8 +156,8 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
       }
       iss
     },
-    #' Turn new rule violations into queries, and auto-resolve open rule
-    #' queries whose violation has disappeared after a data update.
+    # Turn new rule violations into queries, and auto-resolve open rule
+    # queries whose violation has disappeared after a data update.
     raise_queries = function(actor = self$actor) {
       issues <- self$validate()
       known <- self$ledger$get("SELECT query_id, issue_key, status FROM queries WHERE source = 'rule'")
@@ -161,8 +187,8 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
     comment_query = function(query_id, comment, actor = self$actor) self$ledger$comment(query_id, actor, comment),
     query_audit = function(query_id = NULL) self$ledger$audit(query_id),
 
-    #' Write the open-query count per record/event into a REDCap field so site
-    #' staff see it inside REDCap. The field must exist in the dictionary.
+    # Write the open-query count per record/event into a REDCap field so site
+    # staff see it inside REDCap. The field must exist in the dictionary.
     writeback = function(field = "cdmstat_open_queries") {
       private$need_backend()
       if (!field %in% self$metadata$field_name) stop("Field '", field, "' is not in the data dictionary.", call. = FALSE)
@@ -185,7 +211,7 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
     },
 
     # ---- Data cuts --------------------------------------------------------
-    #' Freeze the current cache as an immutable, hashed analysis data cut.
+    # Freeze the current cache as an immutable, hashed analysis data cut.
     freeze = function(label, note = NULL, actor = self$actor) {
       id <- new_id("CUT")
       path <- file.path(self$dir, "cuts", paste0(id, ".rds"))
@@ -199,8 +225,8 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
     },
     sign_off = function(cut_id, comment, actor = self$actor) self$ledger$sign_off(cut_id, actor, comment),
     cuts = function() self$ledger$cuts(),
-    #' Point all analysis methods at a frozen cut (NULL returns to live data).
-    #' The file hash is verified against the ledger before use.
+    # Point all analysis methods at a frozen cut (NULL returns to live data).
+    # The file hash is verified against the ledger before use.
     use_cut = function(cut_id = NULL, require_signoff = FALSE) {
       if (is.null(cut_id)) {
         private$cut <- NULL
@@ -224,18 +250,19 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
     active_cut = function() if (is.null(private$cut)) NULL else private$cut[c("id", "label", "created_at", "sha256", "dict_hash")],
 
     # ---- Analysis ---------------------------------------------------------
-    shape = function(longitudinal = "long", repeating = "drop", labels = TRUE, log = TRUE) {
-      if (log) self$log_code(sprintf("df <- nx$shape(longitudinal = %s, repeating = %s)", deparse(longitudinal), deparse(repeating)))
+    shape = function(longitudinal = "long", repeating = "drop", labels = TRUE, log = TRUE, carry_constant = FALSE) {
+      if (log) self$log_code(sprintf("df <- nx$shape(longitudinal = %s, repeating = %s%s)", deparse(longitudinal), deparse(repeating),
+                                     if (carry_constant) ", carry_constant = TRUE" else ""))
       md <- private$md()
       shape_data(self$data(), md, private$cut$mapping %||% self$mapping,
                  unique((private$cut$repeating %||% self$repeating)$form_name %||% character()),
-                 md$field_name[1], longitudinal, repeating, labels)
+                 md$field_name[1], longitudinal, repeating, labels, carry_constant)
     },
     variables = function(longitudinal = "long", repeating = "drop") {
       attr(self$shape(longitudinal, repeating, log = FALSE), "variables")
     },
     arm = function() detect_arm(private$md()),
-    #' Metadata-driven baseline table: detects the arm and baseline variables.
+    # Metadata-driven baseline table: detects the arm and baseline variables.
     table_one = function(by = NULL, vars = NULL, event = NULL, tests = list(), mode = "exploratory") {
       md <- private$md()
       by <- by %||% detect_arm(md)
@@ -271,10 +298,11 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
       } else by <- NULL
       trend_summary(d, field, by, self$event_order())
     },
-    fit = function(formula, type = "linear", longitudinal = "wide", repeating = "collapse") {
+    fit = function(formula, type = "linear", longitudinal = if (type %in% c("mixed", "mixed_logistic")) "long" else "wide",
+                   repeating = "collapse") {
       self$log_code(sprintf("fit <- nx$fit(%s, type = %s, longitudinal = %s, repeating = %s)", deparse(formula),
                             deparse(type), deparse(longitudinal), deparse(repeating)))
-      fit_model(formula, self$shape(longitudinal, repeating, log = FALSE), type)
+      fit_model(formula, self$shape(longitudinal, repeating, log = FALSE, carry_constant = longitudinal == "long"), type)
     },
 
     # ---- Reproducibility --------------------------------------------------
@@ -282,7 +310,7 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
       self$ledger$log_script(actor, code)
       invisible(code)
     },
-    #' A linear R script that replays the logged analysis steps.
+    # A linear R script that replays the logged analysis steps.
     script = function(since = NULL) {
       lines <- self$ledger$script_lines()
       if (!is.null(since)) lines <- lines[lines$at >= since, , drop = FALSE]
@@ -370,7 +398,25 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
   )
 )
 
+#' Connect to a live REDCap project
+#'
 #' Connect to a live REDCap project.
+#'
+#' @param url REDCap API URL, e.g. `https://redcap.example.org/api/`.
+#' @param token API token. Discouraged: prefer `token_env` or `keyring_service` so tokens never appear in code.
+#' @param token_env Name of the environment variable holding the API token.
+#' @param keyring_service Service name in the OS keyring (the store used by 'keyring' and 'rccola') holding the token.
+#' @param dir Folder holding the local cache, ledger, data cuts and settings. Shared by the app, the API and reports.
+#' @param actor User name recorded in the audit trail and script log.
+#' @param sync Run an incremental sync after connecting.
+#' @return A [CDMSTAT] object.
+#' @examples
+#' \dontrun{
+#' Sys.setenv(REDCAP_API_TOKEN = "...")  # better: .Renviron or keyring
+#' nx <- cdmstat_connect("https://redcap.example.org/api/")
+#' nx$validate()
+#' }
+#' @export
 cdmstat_connect <- function(url, token = NULL, token_env = "REDCAP_API_TOKEN", keyring_service = NULL,
                           dir = file.path(tools::R_user_dir("REDCapCDMSTAT", "data"), "project"),
                           actor = NULL, sync = TRUE) {
@@ -383,7 +429,20 @@ cdmstat_connect <- function(url, token = NULL, token_env = "REDCAP_API_TOKEN", k
   nx
 }
 
+#' Open the simulated demo project
+#'
 #' Open the simulated demo project (no REDCap server needed).
+#'
+#' @param dir Folder holding the local cache, ledger, data cuts and settings. Shared by the app, the API and reports.
+#' @param actor User name recorded in the audit trail and script log.
+#' @param reset Delete and recreate the demo project.
+#' @return A [CDMSTAT] object.
+#' @examples
+#' nx <- cdmstat_demo(dir = file.path(tempdir(), "cdmstat-demo"), reset = TRUE)
+#' nx
+#' head(nx$validate())
+#' nx$table_one()[1:6, 1:6]
+#' @export
 cdmstat_demo <- function(dir = file.path(tools::R_user_dir("REDCapCDMSTAT", "data"), "demo"), actor = NULL,
                        reset = FALSE) {
   if (reset && dir.exists(dir)) unlink(dir, recursive = TRUE)
@@ -400,7 +459,14 @@ cdmstat_demo <- function(dir = file.path(tools::R_user_dir("REDCapCDMSTAT", "dat
 }
 
 #' Load any study from a CDISC ODM 1.3 file (or a function returning ODM
+#'
 #' text), e.g. an export from REDCap Cloud, OpenClinica or Medidata Rave.
+#'
+#' @param file Path to a file.
+#' @param dir Folder holding the local cache, ledger, data cuts and settings. Shared by the app, the API and reports.
+#' @param actor User name recorded in the audit trail and script log.
+#' @return A synced [CDMSTAT] object.
+#' @export
 cdmstat_odm <- function(file, dir = file.path(tools::R_user_dir("REDCapCDMSTAT", "data"), "odm"), actor = NULL) {
   dir.create(dir, showWarnings = FALSE, recursive = TRUE)
   src <- if (is.function(file)) file else normalizePath(file, winslash = "/")
@@ -411,11 +477,25 @@ cdmstat_odm <- function(file, dir = file.path(tools::R_user_dir("REDCapCDMSTAT",
   nx
 }
 
-#' Connect to a REDCap Cloud (nPhase) study through its REST API.
+#' Connect to a REDCap Cloud (nPhase) study through its REST API
 #'
 #' Endpoint paths and the auth header vary by account; take them from the API
 #' documentation inside your REDCap Cloud instance. The token is read from an
 #' environment variable or the OS keyring, never stored.
+#'
+#' @param base_url Base URL of the REDCap Cloud instance.
+#' @param study Study identifier substituted for `{study}` in the endpoint paths.
+#' @param token API token. Discouraged: prefer `token_env` or `keyring_service` so tokens never appear in code.
+#' @param token_env Name of the environment variable holding the API token.
+#' @param keyring_service Service name in the OS keyring (the store used by 'keyring' and 'rccola') holding the token.
+#' @param export_path Path of the study ODM export endpoint, from your REDCap Cloud API documentation.
+#' @param import_path Path of the ODM import endpoint, or `NULL` to disable write-back.
+#' @param auth_header HTTP header carrying the token.
+#' @param auth_prefix Prefix written before the token in the header, e.g. `"Bearer "`.
+#' @param dir Folder holding the local cache, ledger, data cuts and settings. Shared by the app, the API and reports.
+#' @param actor User name recorded in the audit trail and script log.
+#' @return A synced [CDMSTAT] object.
+#' @export
 cdmstat_cloud <- function(base_url, study, token = NULL, token_env = "REDCAP_CLOUD_TOKEN", keyring_service = NULL,
                           export_path = "/api/studies/{study}/odm", import_path = NULL,
                           auth_header = "Authorization", auth_prefix = "Bearer ",
@@ -433,11 +513,18 @@ cdmstat_cloud <- function(base_url, study, token = NULL, token_env = "REDCAP_CLO
   nx
 }
 
+#' Open a cache directory offline
+#'
 #' Open an existing cache directory offline (for reports and reproducible
 #' scripts that only need frozen cuts).
+#'
+#' @param dir Folder holding the local cache, ledger, data cuts and settings. Shared by the app, the API and reports.
+#' @param actor User name recorded in the audit trail and script log.
+#' @return A [CDMSTAT] object without a backend (sync and write-back are unavailable).
+#' @export
 cdmstat_open <- function(dir, actor = NULL) CDMSTAT$new(NULL, dir, actor)
 
-#' Build a CDMSTAT from environment variables, as used by the app and the API.
+#' Build a CDMSTAT from environment variables, as used by the app and the API
 #'
 #' CDMSTAT_SOURCE: "redcap" (default when CDMSTAT_URL is set), "cloud", "odm"
 #'   or "demo" (default otherwise).
@@ -446,6 +533,9 @@ cdmstat_open <- function(dir, actor = NULL) CDMSTAT$new(NULL, dir, actor)
 #'         CDMSTAT_EXPORT_PATH, CDMSTAT_IMPORT_PATH, CDMSTAT_AUTH_HEADER, CDMSTAT_AUTH_PREFIX
 #' odm:    CDMSTAT_ODM_FILE
 #' all:    CDMSTAT_DIR
+#'
+#' @return A [CDMSTAT] object.
+#' @export
 cdmstat_from_env <- function() {
   env <- function(k, d = "") { v <- Sys.getenv(k); if (nzchar(v)) v else d }
   url <- env("CDMSTAT_URL")

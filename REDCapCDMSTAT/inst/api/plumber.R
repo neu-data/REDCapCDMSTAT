@@ -263,7 +263,7 @@ function(req, res, formula, type = "linear") {
   need(req, res, "read")
   tryCatch({
     f <- nx$fit(formula, type)
-    list(n = attr(f, "n"), type = type, coefficients = f)
+    list(n = attr(f, "n"), type = type, groups = attr(f, "groups"), p_method = attr(f, "p_method"), coefficients = f)
   }, error = function(e) { res$status <- 400; list(error = conditionMessage(e)) })
 }
 

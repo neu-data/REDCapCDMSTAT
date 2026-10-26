@@ -1,0 +1,23 @@
+# Caddy alternative to nginx: obtains and renews the TLS certificate automatically.
+cdmstat.example.org {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+	log {
+		output file /var/log/caddy/cdmstat.log
+		format filter {
+			wrap json
+			fields {
+				request>headers>Authorization delete
+				request>uri query {
+					delete key
+				}
+			}
+		}
+	}
+	reverse_proxy 127.0.0.1:8080
+}

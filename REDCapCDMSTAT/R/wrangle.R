@@ -42,17 +42,24 @@ collapse_repeating <- function(rep, md, repeating_forms, id_field) {
   out
 }
 
+#' Reshape typed REDCap data for analysis
+#'
 #' Reshape typed REDCap data for analysis.
 #'
-#' @param longitudinal "long" keeps one row per record and event; "wide" casts
-#'   event-varying fields to `field__event` columns, one row per record.
-#' @param repeating "drop" removes repeating-instrument rows, "collapse" adds
-#'   per-record summaries (counts, any_ for yes/no, max_ for numeric/ordinal),
-#'   "only" returns the repeating rows themselves.
-#' @return a data frame with a "variables" attribute describing each column.
+#' @param data Typed data frame (see [type_data()]) or a shaped analysis data frame.
+#' @param md Data dictionary (REDCap metadata export) as a data frame.
+#' @param mapping Form-event mapping (columns `unique_event_name`, `form`); `NULL` for classic projects.
+#' @param repeating_forms Names of repeating instruments.
+#' @param id_field Name of the record ID field; defaults to the first dictionary field.
+#' @param longitudinal "long" keeps one row per record and event; "wide" casts event-varying fields to `field__event` columns, one row per record.
+#' @param repeating "drop" removes repeating-instrument rows, "collapse" adds per-record summaries (counts, any_ for yes/no, max_ for numeric/ordinal), "only" returns the repeating rows themselves.
+#' @param labels Convert coded categorical fields to labelled factors.
+#' @param carry_constant In long data, copy record-level fields (forms collected at one event, such as arm or age) to every row.
+#' @return A data frame with a `variables` attribute describing each column (name, source field, event, label, type).
+#' @export
 shape_data <- function(data, md, mapping = NULL, repeating_forms = character(), id_field = md$field_name[1],
                        longitudinal = c("long", "wide"), repeating = c("drop", "collapse", "only"),
-                       labels = TRUE) {
+                       labels = TRUE, carry_constant = FALSE) {
   longitudinal <- match.arg(longitudinal)
   repeating <- match.arg(repeating)
   rep_col <- if ("redcap_repeat_instrument" %in% names(data)) data$redcap_repeat_instrument else rep(NA, nrow(data))
@@ -94,6 +101,18 @@ shape_data <- function(data, md, mapping = NULL, repeating_forms = character(), 
       }
     } else {
       out <- base
+      # Long data for repeated-measures models: copy record-level fields
+      # (forms collected at a single event, e.g. arm, age) to every visit row.
+      if (carry_constant && has_events && !is.null(mapping) && nrow(mapping)) {
+        form_n <- table(mapping$form)
+        single <- md$field_name[md$form_name %in% names(form_n)[form_n == 1]]
+        cols <- intersect(setdiff(field_columns(md, single), id_field), names(out))
+        if (length(cols)) {
+          first <- first_non_na_by(out[, c(id_field, cols), drop = FALSE], id_field)
+          idx <- match(out[[id_field]], first[[id_field]])
+          for (cc in cols) out[[cc]] <- first[[cc]][idx]
+        }
+      }
     }
     if (repeating == "collapse" && any(is_rep)) {
       agg <- collapse_repeating(data[is_rep, , drop = FALSE], md, repeating_forms, id_field)
