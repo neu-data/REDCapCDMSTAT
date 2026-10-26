@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>REDCap CDMSTAT</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.35.0/plotly.min.js"></script>
+</head>
+<body>
+  <div id="login" class="login hidden">
+    <form id="login-form" class="login-card">
+      <h1>REDCap CDMSTAT</h1>
+      <p class="muted">Data management and statistical analysis workspace</p>
+      <label>API key <input id="login-key" type="password" autocomplete="off" required></label>
+      <button class="btn primary" type="submit">Sign in</button>
+      <p id="login-error" class="error"></p>
+    </form>
+  </div>
+
+  <div id="app" class="hidden">
+    <header class="topbar">
+      <div class="brand">REDCap CDMSTAT <span id="project" class="muted"></span></div>
+      <nav id="nav">
+        <a href="#dashboard">Dashboard</a>
+        <a href="#quality">Data quality</a>
+        <a href="#queries">Queries</a>
+        <a href="#explore">Explore</a>
+        <a href="#wrangle">Wrangle</a>
+        <a href="#stats">Statistics</a>
+        <a href="#cuts">Data cuts</a>
+        <a href="#script">Script</a>
+        <span class="nav-sep">CDMS</span>
+        <a href="#random">Randomize</a>
+        <a href="#sdv">SDV</a>
+        <a href="#locks">Locks &amp; e-sign</a>
+        <a href="#coding">Coding</a>
+        <a href="#deviations">Deviations</a>
+        <a href="#sites">Sites</a>
+        <a href="#cdisc">CDISC</a>
+      </nav>
+      <div class="who"><span id="live" class="dot" title="Live updates"></span><span id="whoami"></span>
+        <button id="logout" class="btn ghost small">Sign out</button></div>
+    </header>
+
+    <main>
+      <section id="view-dashboard" class="view">
+        <div class="tiles" id="tiles"></div>
+        <div class="grid2">
+          <div class="card"><div class="card-h">Queries by status <button class="btn small" id="btn-sync">Sync now</button></div><div id="q-chart" class="chart"></div></div>
+          <div class="card"><div class="card-h">Data dictionary drift</div><div id="schema" class="table-wrap"></div></div>
+        </div>
+        <div class="card"><div class="card-h">Sync history (log polling, DET and full pulls)</div><div id="synclog" class="table-wrap"></div></div>
+      </section>
+
+      <section id="view-quality" class="view">
+        <div class="card">
+          <div class="card-h">Rule violations from the live dictionary and custom rules
+            <button class="btn warn small" id="btn-raise">Raise queries for new issues</button></div>
+          <div id="issues" class="table-wrap"></div>
+        </div>
+        <div class="card">
+          <div class="card-h">Add a custom rule (REDCap syntax, must be TRUE)</div>
+          <form id="rule-form" class="form-row">
+            <input name="id" placeholder="rule id" required>
+            <input name="logic" placeholder="[weight] &lt; 180" required>
+            <input name="message" placeholder="message shown on the query" required>
+            <select name="severity"><option>warning</option><option>error</option></select>
+            <button class="btn" type="submit">Add rule</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="view-queries" class="view">
+        <div class="card drw-bar"><div class="card-h">REDCap Data Resolution Workflow <span id="drw-state" class="pill"></span>
+          <span><button class="btn small" id="drw-enable">Enable</button> <button class="btn small primary" id="drw-sync">Sync with REDCap</button></span></div></div>
+        <div class="board" id="board"></div>
+      </section>
+
+      <section id="view-explore" class="view">
+        <div class="card">
+          <div class="form-row">
+            <label>X <select id="ex-x"></select></label>
+            <label>Y (outlier check) <select id="ex-y"></select></label>
+            <label>Event <select id="ex-event"></select></label>
+            <label>Method <select id="ex-method"><option value="z">Robust z</option><option value="iqr">Tukey IQR</option></select></label>
+            <label>Threshold <input id="ex-thr" type="number" value="3" step="0.5" min="1"></label>
+          </div>
+          <p class="muted">Click a point to raise a query on that record. Data managers see it immediately.</p>
+          <div id="ex-plot" class="chart tall"></div>
+        </div>
+      </section>
+
+      <section id="view-wrangle" class="view">
+        <div class="card">
+          <div class="form-row">
+            <label>Longitudinal <select id="wr-long"><option value="long">Keep long (row per visit)</option><option value="wide">Cast wide by event</option></select></label>
+            <label>Repeating instruments <select id="wr-rep"><option value="drop">Drop</option><option value="collapse">Collapse to per-record summaries</option><option value="only">Only repeating rows</option></select></label>
+            <span id="wr-dim" class="pill"></span>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="card"><div class="card-h">Variables available to models</div><div id="wr-vars" class="table-wrap"></div></div>
+          <div class="card"><div class="card-h">Preview (first 25 rows)</div><div id="wr-preview" class="table-wrap"></div></div>
+        </div>
+      </section>
+
+      <section id="view-stats" class="view">
+        <div class="card">
+          <div class="card-h">Table 1 - baseline characteristics</div>
+          <div class="form-row">
+            <label>Compare by <select id="t1-by"></select></label>
+            <label>Event <select id="t1-event"></select></label>
+          </div>
+          <p class="muted">Arm and baseline variables come from the dictionary. Tests are chosen per variable from normality and expected counts; the rationale column shows why. Use SAP mode in R for confirmatory analysis.</p>
+          <div id="t1" class="table-wrap"></div>
+        </div>
+        <div class="grid2">
+          <div class="card"><div class="card-h">Longitudinal trend <select id="tr-field"></select></div><div id="tr-plot" class="chart"></div></div>
+          <div class="card">
+            <div class="card-h">Model builder (wide + collapsed data)</div>
+            <form id="fit-form" class="form-col">
+              <input name="formula" value="sbp__week_24 ~ arm + sbp__baseline + age">
+              <div class="form-row"><select name="type"><option>linear</option><option>logistic</option><option>cox</option></select>
+                <button class="btn primary" type="submit">Fit</button></div>
+            </form>
+            <p class="muted">Cox: Surv(followup_days, event_occurred == 'Yes') ~ arm + age</p>
+            <div id="fit-out" class="table-wrap"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="view-cuts" class="view">
+        <div class="card">
+          <form id="cut-form" class="form-row">
+            <input name="label" placeholder="Cut label, e.g. Interim 1" required>
+            <input name="note" placeholder="Note (optional)">
+            <button class="btn primary" type="submit">Freeze current data</button>
+          </form>
+          <div id="cuts" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="view-random" class="view">
+        <div class="grid2">
+          <div class="card">
+            <div class="card-h">Randomize a subject</div>
+            <form id="rz-form" class="form-row"><input name="record_id" placeholder="Record ID" required>
+              <button class="btn primary" type="submit">Randomize</button></form>
+            <div id="rz-result" class="muted"></div>
+          </div>
+          <div class="card">
+            <div class="card-h">Schedule set-up (data managers, before the first allocation)</div>
+            <form id="rz-setup" class="form-row">
+              <input name="strata" placeholder="strata fields, e.g. site, sex">
+              <input name="block_sizes" value="4, 6" placeholder="block sizes">
+              <input name="per_stratum" type="number" value="200">
+              <button class="btn" type="submit">Generate</button>
+            </form>
+          </div>
+        </div>
+        <div class="card"><div class="card-h">Balance by stratum</div><div id="rz-balance" class="table-wrap"></div></div>
+        <div class="card"><div class="card-h">Allocations (visible to data managers only)</div><div id="rz-alloc" class="table-wrap"></div></div>
+      </section>
+
+      <section id="view-sdv" class="view">
+        <div class="card">
+          <form id="sdv-plan" class="form-row">
+            <label>Critical fields <input name="critical_fields" value="arm, event_occurred, ae_serious"></label>
+            <label>First N per site <input name="first_n" type="number" value="3"></label>
+            <label>Random sample <input name="sample_rate" type="number" step="0.05" value="0.2"></label>
+            <button class="btn" type="submit">Apply plan</button>
+            <button class="btn primary" type="button" id="sdv-verify">Verify selected</button>
+            <span id="sdv-progress" class="pill"></span>
+          </form>
+          <div id="sdv-tbl" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="view-locks" class="view">
+        <div class="grid2">
+          <div class="card"><div class="card-h">Lock</div>
+            <form id="lock-form" class="form-row"><input name="record_id" placeholder="Record ID" required>
+              <input name="reason" placeholder="Reason" required><button class="btn" type="submit">Lock</button></form></div>
+          <div class="card"><div class="card-h">Electronic signature (re-enter your key)</div>
+            <form id="sign-form" class="form-col"><input name="record_id" placeholder="Record ID" required>
+              <input name="meaning" value="I approve the data of this record as Principal Investigator" required>
+              <input name="credential" type="password" placeholder="Your API key" autocomplete="off" required>
+              <button class="btn primary" type="submit">Sign</button></form></div>
+        </div>
+        <div class="card"><div class="card-h">Active locks</div><div id="locks-tbl" class="table-wrap"></div></div>
+        <div class="card"><div class="card-h">Signatures</div><div id="sigs-tbl" class="table-wrap"></div></div>
+      </section>
+
+      <section id="view-coding" class="view">
+        <div class="card">
+          <div class="form-row"><label>Verbatim field <input id="cd-field" value="ae_term"></label>
+            <button class="btn primary" id="cd-run">Auto-code</button>
+            <span class="muted">The demo dictionary uses fictitious codes; load MedDRA/WHODrug in R with <code>nx$load_dictionary()</code>.</span></div>
+          <div id="cd-tbl" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="view-deviations" class="view">
+        <div class="card">
+          <form id="dv-form" class="form-row">
+            <input name="record_id" placeholder="Record ID" required>
+            <select name="category"><option>Eligibility</option><option>Informed consent</option><option>Visit out of window</option><option>Dosing</option><option>Procedure not done</option><option>Other</option></select>
+            <input name="description" placeholder="Description" required>
+            <select name="severity"><option>minor</option><option>major</option></select>
+            <button class="btn" type="submit">Log deviation</button>
+            <button class="btn warn" type="button" id="dv-check">Detect out-of-window visits</button>
+          </form>
+          <div id="dv-tbl" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="view-sites" class="view">
+        <div class="card"><div class="card-h">Site metrics</div><div id="sites-tbl" class="table-wrap"></div></div>
+        <div class="card"><div class="card-h">Cumulative enrolment</div><div id="enrol-plot" class="chart"></div></div>
+      </section>
+
+      <section id="view-cdisc" class="view">
+        <div class="card">
+          <div class="form-row">
+            <label>Domain <select id="sd-domain"><option>DM</option><option>VS</option><option>LB</option><option>AE</option></select></label>
+            <button class="btn" id="sd-csv">Download CSV</button>
+            <button class="btn" id="odm-dl">Download ODM 1.3 XML</button>
+          </div>
+          <div id="sd-tbl" class="table-wrap"></div>
+        </div>
+      </section>
+
+      <section id="view-script" class="view">
+        <div class="card"><div class="card-h">Reproducible R script <button class="btn small" id="btn-dl-script">Download .R</button></div>
+          <pre id="script" class="code"></pre></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="modal">
+    <form method="dialog" id="modal-form">
+      <h3 id="modal-title"></h3>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" value="cancel" formnovalidate>Cancel</button>
+        <button class="btn primary" value="ok" id="modal-ok">OK</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="toasts"></div>
+  <script src="app.js"></script>
+</body>
+</html>

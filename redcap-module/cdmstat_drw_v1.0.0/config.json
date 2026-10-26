@@ -1,0 +1,58 @@
+{
+  "name": "CDMSTAT Data Resolution Workflow API",
+  "namespace": "Neudata\\CDMSTATDRW",
+  "description": "Exposes REDCap's native Data Resolution Workflow (field-level data queries and data verification) through the REDCap API so that REDCap CDMSTAT, or any client holding a project API token, can open, respond to, close and reopen queries, mark values verified, and read query threads back. Every write is checked against the token user's Data Resolution Workflow rights and logged in the project's logging.",
+  "framework-version": 15,
+  "authors": [
+    {
+      "name": "Neudata Consultancy",
+      "email": "b.osangir@gmail.com",
+      "institution": "Neudata Consultancy"
+    }
+  ],
+  "compatibility": {
+    "php-version-min": "7.4.0",
+    "redcap-version-min": "14.0.0"
+  },
+  "project-settings": [
+    {
+      "key": "allowed-usernames",
+      "name": "Restrict write actions to these API users (comma-separated usernames; blank = any user with Data Resolution Workflow rights)",
+      "type": "text"
+    },
+    {
+      "key": "attribute-actor",
+      "name": "Prefix comments with the CDMSTAT user who made the change (recommended when a shared service account holds the token)",
+      "type": "checkbox"
+    }
+  ],
+  "api-actions": {
+    "drw-status": {
+      "description": "Reports whether the Data Resolution Workflow is enabled, whether the database schema matches what this module expects, and the token user's DRW rights."
+    },
+    "list-queries": {
+      "description": "Lists field-level query and verification threads with their resolutions. Optional: <code>since_res_id</code> (only resolutions after this id), <code>record</code>."
+    },
+    "open-query": {
+      "description": "Opens a query on a field (or reopens a closed one). Required: <code>record</code>, <code>field</code>, <code>comment</code>. Optional: <code>event</code> (unique event name), <code>instance</code>, <code>repeat_instrument</code>, <code>assign_to</code> (username), <code>actor</code>."
+    },
+    "respond": {
+      "description": "Responds to an open query. Required: <code>status_id</code>, <code>comment</code>. Optional: <code>response</code> (DATA_MISSING, TYPOGRAPHICAL_ERROR, CONFIRMED_CORRECT, WRONG_SOURCE, OTHER), <code>actor</code>."
+    },
+    "close-query": {
+      "description": "Closes an open query. Required: <code>status_id</code>, <code>comment</code>. Optional: <code>actor</code>."
+    },
+    "reopen-query": {
+      "description": "Reopens a closed query. Required: <code>status_id</code>, <code>comment</code>. Optional: <code>actor</code>."
+    },
+    "add-comment": {
+      "description": "Adds a comment to a thread without changing its status. Required: <code>status_id</code>, <code>comment</code>. Optional: <code>actor</code>."
+    },
+    "verify-field": {
+      "description": "Marks a field value as verified (source data verification). Required: <code>record</code>, <code>field</code>. Optional: <code>event</code>, <code>instance</code>, <code>repeat_instrument</code>, <code>comment</code>, <code>actor</code>."
+    },
+    "deverify-field": {
+      "description": "Removes verification from a field value. Same parameters as verify-field; <code>comment</code> is required."
+    }
+  }
+}

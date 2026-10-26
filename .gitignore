@@ -1,0 +1,24 @@
+# Secrets and per-install state: never commit
+web/gateway/users.json
+.env
+.Renviron
+*.token
+
+# Local data caches, ledgers and exports may hold identifiable data
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+cache.rds
+demo_backend.rds
+odm_hashes.rds
+cuts/
+
+# Build / tool output
+__pycache__/
+*.pyc
+.Rhistory
+.RData
+.Rproj.user/
+REDCapCDMSTAT/..Rcheck/
+*.Rcheck/
+*.tar.gz

@@ -1,0 +1,63 @@
+Package: REDCapCDMSTAT
+Type: Package
+Title: Clinical Data Management and Statistical Analysis for 'REDCap' and 'REDCap Cloud'
+Version: 0.1.0
+Authors@R: person("Neudata Consultancy", role = c("aut", "cre"),
+    email = "b.osangir@gmail.com")
+Description: A single engine that closes the loop between clinical data
+    management and biostatistics on 'REDCap' projects. It keeps a local cache
+    that is patched incrementally from the 'REDCap' log and Data Entry Trigger
+    calls, detects data dictionary drift, compiles branching logic and
+    calculated fields from the live dictionary, runs validation rules, keeps an
+    audited query ledger, freezes hashed analysis data cuts, reshapes
+    longitudinal and repeating data, generates metadata-driven baseline tables
+    with guarded test selection, and records every analytic action as a
+    reproducible R script. A 'shiny' app, a 'plumber' API and a 'Quarto'
+    report template are shipped on top of the same engine.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Depends: R (>= 4.1.0)
+Imports:
+    R6,
+    httr2,
+    DBI,
+    RSQLite,
+    jsonlite,
+    digest,
+    stats,
+    utils,
+    tools
+Suggests:
+    shiny,
+    bslib,
+    plotly,
+    DT,
+    plumber,
+    keyring,
+    survival,
+    knitr,
+    rmarkdown,
+    quarto,
+    xml2,
+    haven,
+    callr,
+    httpuv,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+Collate:
+    'utils.R'
+    'logic.R'
+    'data.R'
+    'schema.R'
+    'odm.R'
+    'backend.R'
+    'demo.R'
+    'ledger.R'
+    'rules.R'
+    'wrangle.R'
+    'stats.R'
+    'engine.R'
+    'cdms.R'
+    'cdisc.R'
+    'drw.R'
+    'launch.R'
