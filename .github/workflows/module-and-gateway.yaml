@@ -27,7 +27,8 @@ jobs:
       - name: Lint
         run: php -l redcap-module/cdmstat_drw_v1.0.0/CDMSTATDRW.php
       - name: Validate config.json
-        run: php -r 'json_decode(file_get_contents("redcap-module/cdmstat_drw_v1.0.0/config.json")); exit(json_last_error() ? 1 : 0);'
+        run: |
+          php -r 'json_decode(file_get_contents("redcap-module/cdmstat_drw_v1.0.0/config.json")); exit(json_last_error() ? 1 : 0);'
       - name: Tests
         run: php redcap-module/cdmstat_drw_v1.0.0/tests/run_tests.php
 
