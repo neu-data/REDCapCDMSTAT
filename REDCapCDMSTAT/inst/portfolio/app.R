@@ -10,7 +10,10 @@ if (is.null(names(dirs))) names(dirs) <- basename(dirs)
 dt <- function(df) datatable(df, rownames = FALSE, filter = "top", options = list(pageLength = 20, scrollX = TRUE, dom = "tip"))
 
 ui <- page_navbar(
-  title = "REDCap CDMSTAT portfolio",
+  title = tags$span(tags$img(src = "logo.png", class = "brand-logo", alt = ""), "REDCap CDMSTAT portfolio"),
+  window_title = "REDCap CDMSTAT portfolio",
+  header = tagList(tags$head(tags$link(rel = "icon", type = "image/png", href = "favicon.png")),
+                   tags$style(HTML(".brand-logo{height:34px;width:34px;border-radius:6px;background:#fff;padding:2px;margin-right:10px;vertical-align:middle}"))),
   theme = bs_theme(version = 5, primary = "#2c5d8f", "navbar-bg" = "#1f3b57",
                    base_font = font_collection("Inter", "Segoe UI", "system-ui", "sans-serif")),
   nav_panel("Studies",

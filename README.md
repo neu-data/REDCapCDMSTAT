@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/cdmstat-logo-256.png" alt="REDCap CDMSTAT logo" width="160"></p>
+
 # REDCap CDMSTAT
 
 Clinical data management (CDM) **and** statistical analysis (STAT) on one

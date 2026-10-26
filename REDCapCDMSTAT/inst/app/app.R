@@ -30,9 +30,13 @@ dt <- function(df, ...) {
 }
 
 ui <- page_navbar(
-  title = "REDCap CDMSTAT",
+  title = tags$span(tags$img(src = "logo.png", class = "brand-logo", alt = ""), "REDCap CDMSTAT"),
+  window_title = "REDCap CDMSTAT",
   theme = bs_theme(version = 5, primary = "#2c5d8f", "navbar-bg" = "#1f3b57", base_font = font_collection("Inter", "Segoe UI", "system-ui", "sans-serif")),
-  header = tags$style(HTML(".value-box-title{font-size:.8rem} .card{margin-bottom:1rem} pre{white-space:pre-wrap}")),
+  header = tagList(
+    tags$head(tags$link(rel = "icon", type = "image/png", href = "favicon.png")),
+    tags$style(HTML(".value-box-title{font-size:.8rem} .card{margin-bottom:1rem} pre{white-space:pre-wrap} .brand-logo{height:34px;width:34px;border-radius:6px;background:#fff;padding:2px;margin-right:10px;vertical-align:middle}"))
+  ),
   nav_panel("Overview", icon = icon("gauge"),
     layout_column_wrap(width = 1 / 4,
       value_box("Records", textOutput("vb_records"), showcase = icon("users")),
