@@ -156,7 +156,7 @@ const views = {
     const cuts = await api("cuts");
     $("#cuts").innerHTML = table(cuts.map((c) => Object.assign({}, c, { sha256: (c.sha256 || "").slice(0, 16) })),
       ["cut_id", "label", "created_by", "created_at", "n_records", "n_rows", "sha256", "signed_off_by", "signed_off_at", "action"],
-      { html: { action: (c) => c.signed_off_by ? "&#10003; signed" : (can("cut_write") ? `<button class="btn small" data-sign="${esc(c.cut_id)}">Sign off</button>` : "") } });
+      { html: { action: (c) => c.signed_off_by ? "Signed" : (can("cut_write") ? `<button class="btn small" data-sign="${esc(c.cut_id)}">Sign off</button>` : "") } });
     document.querySelectorAll("[data-sign]").forEach((b) => b.addEventListener("click", async () => {
       const v = await modal("Sign off " + b.dataset.sign, '<label>Sign-off statement<textarea name="comment" required>Data reviewed and clean for analysis</textarea></label>', "Sign off");
       if (!v) return;

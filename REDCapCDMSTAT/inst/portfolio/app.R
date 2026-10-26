@@ -21,7 +21,7 @@ ui <- page_navbar(
     card(card_header("Queries by status"), plotlyOutput("qplot", height = 300))),
   nav_panel("Sites", card(card_header("Site metrics across studies"), DTOutput("sites"))),
   nav_spacer(),
-  nav_item(actionButton("refresh", "Refresh", icon = icon("rotate"), class = "btn-sm"))
+  nav_item(actionButton("refresh", "Refresh", class = "btn-sm"))
 )
 
 server <- function(input, output, session) {

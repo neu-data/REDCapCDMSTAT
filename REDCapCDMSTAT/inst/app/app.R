@@ -37,17 +37,17 @@ ui <- page_navbar(
     tags$head(tags$link(rel = "icon", type = "image/png", href = "favicon.png")),
     tags$style(HTML(".value-box-title{font-size:.8rem} .card{margin-bottom:1rem} pre{white-space:pre-wrap} .brand-logo{height:34px;width:34px;border-radius:6px;background:#fff;padding:2px;margin-right:10px;vertical-align:middle}"))
   ),
-  nav_panel("Overview", icon = icon("gauge"),
+  nav_panel("Overview",
     layout_column_wrap(width = 1 / 4,
-      value_box("Records", textOutput("vb_records"), showcase = icon("users")),
-      value_box("Open queries", textOutput("vb_open"), showcase = icon("flag")),
-      value_box("Rule violations", textOutput("vb_issues"), showcase = icon("triangle-exclamation")),
-      value_box("Last sync", textOutput("vb_sync"), showcase = icon("rotate"))
+      value_box("Records", textOutput("vb_records")),
+      value_box("Open queries", textOutput("vb_open")),
+      value_box("Rule violations", textOutput("vb_issues")),
+      value_box("Last sync", textOutput("vb_sync"))
     ),
     layout_columns(col_widths = c(4, 8),
       card(card_header("Project"), uiOutput("project_info"),
-           actionButton("sync", "Sync now (incremental)", icon = icon("rotate"), class = "btn-primary"),
-           actionButton("sync_full", "Full re-pull", icon = icon("download"), class = "btn-outline-secondary mt-2")),
+           actionButton("sync", "Sync now (incremental)", class = "btn-primary"),
+           actionButton("sync_full", "Full re-pull", class = "btn-outline-secondary mt-2")),
       card(card_header("Queries by status and source"), plotlyOutput("q_plot", height = 260))
     ),
     layout_columns(col_widths = c(6, 6),
@@ -55,41 +55,41 @@ ui <- page_navbar(
       card(card_header("Sync history"), DTOutput("sync_tbl"))
     )
   ),
-  nav_panel("Data quality", icon = icon("clipboard-check"),
+  nav_panel("Data quality",
     layout_sidebar(
       sidebar = sidebar(width = 320,
-        actionButton("raise", "Raise queries for new issues", icon = icon("flag"), class = "btn-warning"),
+        actionButton("raise", "Raise queries for new issues", class = "btn-warning"),
         helpText("Rules come from the live data dictionary (ranges, required, branching, calculations) plus custom rules below. Fixed issues auto-resolve their queries."),
         hr(), h6("Add a custom rule (REDCap syntax, must be TRUE)"),
         textInput("rule_id", "Rule id", "weight_change"),
         textInput("rule_logic", "Condition", "[weight] < 180"),
         textInput("rule_msg", "Message", "Weight above 180 kg - please verify"),
         selectInput("rule_sev", "Severity", c("warning", "error")),
-        actionButton("add_rule", "Add rule", icon = icon("plus")),
+        actionButton("add_rule", "Add rule"),
         uiOutput("rule_list")
       ),
       card(card_header("Current rule violations"), DTOutput("issues_tbl"))
     )
   ),
-  nav_panel("Queries", icon = icon("list-check"),
+  nav_panel("Queries",
     layout_sidebar(
       sidebar = sidebar(width = 300,
         checkboxGroupInput("q_status", "Status", status_choices, selected = c("open", "answered")),
         hr(), h6("Selected query"), uiOutput("q_selected"),
         selectInput("q_new_status", "Move to", status_choices),
         textAreaInput("q_comment", "Reason for change (required)", rows = 3),
-        actionButton("q_apply", "Apply transition", icon = icon("check"), class = "btn-primary"),
-        actionButton("q_add_comment", "Add comment only", icon = icon("comment"), class = "btn-outline-secondary mt-2"),
-        hr(), actionButton("writeback", "Write open counts to REDCap", icon = icon("upload")),
+        actionButton("q_apply", "Apply transition", class = "btn-primary"),
+        actionButton("q_add_comment", "Add comment only", class = "btn-outline-secondary mt-2"),
+        hr(), actionButton("writeback", "Write open counts to REDCap"),
         hr(), h6("REDCap Data Resolution Workflow"), uiOutput("drw_state"),
-        actionButton("drw_enable", "Enable DRW write-back", icon = icon("plug")),
-        actionButton("drw_sync", "Sync with REDCap DRW", icon = icon("arrows-rotate"), class = "btn-outline-primary mt-2")
+        actionButton("drw_enable", "Enable DRW write-back"),
+        actionButton("drw_sync", "Sync with REDCap DRW", class = "btn-outline-primary mt-2")
       ),
       card(card_header("Query ledger"), DTOutput("q_tbl")),
       card(card_header("Audit trail of selected query"), DTOutput("audit_tbl"))
     )
   ),
-  nav_panel("Explore", icon = icon("chart-line"),
+  nav_panel("Explore",
     layout_sidebar(
       sidebar = sidebar(width = 300,
         selectInput("ex_x", "X axis", NULL), selectInput("ex_y", "Y axis (outlier check)", NULL),
@@ -102,12 +102,12 @@ ui <- page_navbar(
       card(card_header("Flagged outliers on Y"), DTOutput("ex_out"))
     )
   ),
-  nav_panel("Wrangle", icon = icon("table-cells"),
+  nav_panel("Wrangle",
     layout_sidebar(
       sidebar = sidebar(width = 300,
         radioButtons("wr_long", "Longitudinal events", c("Keep long (row per visit)" = "long", "Cast wide by event" = "wide")),
         radioButtons("wr_rep", "Repeating instruments", c("Drop" = "drop", "Collapse to per-record summaries" = "collapse", "Only repeating rows" = "only")),
-        downloadButton("wr_dl", "Download CSV"),
+        downloadButton("wr_dl", "Download CSV", icon = NULL),
         helpText("The variable list updates instantly; it is what the model builder can use.")
       ),
       layout_columns(col_widths = c(5, 7),
@@ -116,13 +116,13 @@ ui <- page_navbar(
       )
     )
   ),
-  nav_panel("Statistics", icon = icon("square-root-variable"),
+  nav_panel("Statistics",
     navset_card_tab(
       nav_panel("Table 1",
         layout_columns(col_widths = c(3, 3, 3, 3),
           selectInput("t1_by", "Compare by", NULL), selectInput("t1_event", "Event", NULL),
           radioButtons("t1_mode", "Mode", c("Exploratory (auto tests)" = "exploratory"), inline = TRUE),
-          downloadButton("t1_dl", "Download CSV")),
+          downloadButton("t1_dl", "Download CSV", icon = NULL)),
         helpText("Arm and baseline variables are detected from the dictionary. Tests are chosen per variable from normality and expected counts; the rationale column shows why. For confirmatory analysis use SAP mode via the R API (tests pre-specified)."),
         DTOutput("t1_tbl")),
       nav_panel("Longitudinal trends",
@@ -131,30 +131,30 @@ ui <- page_navbar(
         layout_columns(col_widths = c(6, 3, 3),
           textInput("m_formula", "Formula (wide + collapsed data)", "sbp__week_24 ~ arm + sbp__baseline + age"),
           selectInput("m_type", "Model", c("linear", "logistic", "cox", "mixed", "mixed_logistic")),
-          actionButton("m_run", "Fit", icon = icon("play"), class = "btn-primary mt-4")),
+          actionButton("m_run", "Fit", class = "btn-primary mt-4")),
         helpText("Cox: Surv(followup_days, event_occurred == 'Yes') ~ arm + age. Logistic: any_ae_serious ~ arm. Mixed (repeated measures on long data): sbp ~ arm * redcap_event_name + (1 | record_id)."),
         verbatimTextOutput("m_info"), DTOutput("m_tbl"))
     )
   ),
-  nav_panel("Data cuts", icon = icon("lock"),
+  nav_panel("Data cuts",
     layout_sidebar(
       sidebar = sidebar(width = 320,
         textInput("cut_label", "Cut label", "Interim analysis 1"), textAreaInput("cut_note", "Note", rows = 2),
-        actionButton("cut_freeze", "Freeze current data", icon = icon("snowflake"), class = "btn-primary"),
+        actionButton("cut_freeze", "Freeze current data", class = "btn-primary"),
         hr(), textAreaInput("cut_sign_comment", "Sign-off statement", "Data reviewed and clean for analysis", rows = 2),
-        actionButton("cut_sign", "Sign off selected cut", icon = icon("signature")),
-        hr(), actionButton("cut_use", "Analyse selected cut", icon = icon("play")),
-        actionButton("cut_live", "Back to live data", icon = icon("bolt"), class = "btn-outline-secondary mt-2"),
+        actionButton("cut_sign", "Sign off selected cut"),
+        hr(), actionButton("cut_use", "Analyse selected cut"),
+        actionButton("cut_live", "Back to live data", class = "btn-outline-secondary mt-2"),
         uiOutput("cut_active")
       ),
       card(card_header("Frozen, hashed analysis data cuts"), DTOutput("cuts_tbl"))
     )
   ),
-  nav_panel("Script", icon = icon("code"),
+  nav_panel("Script",
     card(card_header("Reproducible R script of this project's analysis steps"),
-         downloadButton("script_dl", "Download .R"), verbatimTextOutput("script_txt"))
+         downloadButton("script_dl", "Download .R", icon = NULL), verbatimTextOutput("script_txt"))
   ),
-  nav_menu("CDMS", icon = icon("hospital"),
+  nav_menu("CDMS",
     nav_panel("Randomization",
       layout_sidebar(
         sidebar = sidebar(width = 320,
@@ -162,10 +162,10 @@ ui <- page_navbar(
           selectizeInput("rz_strata", "Stratify by", NULL, multiple = TRUE),
           textInput("rz_blocks", "Block sizes", "4, 6"),
           numericInput("rz_per", "Slots per stratum", 200, min = 10),
-          actionButton("rz_setup", "Generate concealed schedule", icon = icon("shuffle")),
+          actionButton("rz_setup", "Generate concealed schedule"),
           hr(), h6("Randomize a subject"),
           selectizeInput("rz_record", "Record", NULL),
-          actionButton("rz_go", "Randomize", icon = icon("dice"), class = "btn-primary")
+          actionButton("rz_go", "Randomize", class = "btn-primary")
         ),
         card(card_header("Allocation balance by stratum"), DTOutput("rz_balance")),
         card(card_header("Allocations (audit)"), DTOutput("rz_alloc"))
@@ -176,9 +176,9 @@ ui <- page_navbar(
           selectizeInput("sdv_crit", "Critical fields (100% SDV)", NULL, multiple = TRUE),
           numericInput("sdv_first", "First N subjects per site", 3, min = 0),
           sliderInput("sdv_rate", "Random sample of remaining", 0, 1, .2, step = .05),
-          actionButton("sdv_plan", "Apply SDV plan", icon = icon("list-check")),
+          actionButton("sdv_plan", "Apply SDV plan"),
           hr(), checkboxInput("sdv_req", "Required units only", TRUE),
-          actionButton("sdv_verify", "Mark selected as verified", icon = icon("check-double"), class = "btn-primary")
+          actionButton("sdv_verify", "Mark selected as verified", class = "btn-primary")
         ),
         card(card_header("Source data verification units (record x event x form)"), DTOutput("sdv_tbl"))
       )),
@@ -186,11 +186,11 @@ ui <- page_navbar(
       layout_columns(col_widths = c(4, 8),
         card(card_header("Lock / sign"),
              selectizeInput("lk_record", "Record", NULL), textInput("lk_reason", "Lock reason", "Database lock"),
-             actionButton("lk_go", "Lock record", icon = icon("lock")),
+             actionButton("lk_go", "Lock record"),
              hr(), textInput("sg_meaning", "Signature meaning", "I approve the data of this record as Principal Investigator"),
              textInput("sg_user", "Re-enter your user name to sign"),
-             actionButton("sg_go", "Sign record", icon = icon("signature"), class = "btn-primary"),
-             hr(), textInput("ul_reason", "Unlock reason"), actionButton("ul_go", "Unlock selected lock", icon = icon("unlock"))),
+             actionButton("sg_go", "Sign record", class = "btn-primary"),
+             hr(), textInput("ul_reason", "Unlock reason"), actionButton("ul_go", "Unlock selected lock")),
         tagList(card(card_header("Active locks (integrity checked against current data)"), DTOutput("lk_tbl")),
                 card(card_header("Electronic signatures"), DTOutput("sg_tbl")))
       )),
@@ -198,10 +198,10 @@ ui <- page_navbar(
       layout_sidebar(
         sidebar = sidebar(width = 320,
           selectInput("cd_field", "Verbatim field", NULL),
-          actionButton("cd_run", "Auto-code", icon = icon("wand-magic-sparkles"), class = "btn-primary"),
+          actionButton("cd_run", "Auto-code", class = "btn-primary"),
           fileInput("cd_dict", "Load dictionary CSV (code, term, synonyms)", accept = ".csv"),
           helpText("The built-in dictionary is a demo with fictitious codes. Load your licensed MedDRA / WHODrug export."),
-          hr(), actionButton("cd_approve", "Approve selected suggestion", icon = icon("check")),
+          hr(), actionButton("cd_approve", "Approve selected suggestion"),
           textInput("cd_code", "...or assign code"), actionButton("cd_assign", "Assign code to selected")
         ),
         card(card_header("Coding queue"), DTOutput("cd_tbl"))
@@ -210,12 +210,12 @@ ui <- page_navbar(
       layout_sidebar(
         sidebar = sidebar(width = 320,
           numericInput("dv_window", "Visit window (+/- days)", 7, min = 0),
-          actionButton("dv_check", "Detect out-of-window visits", icon = icon("calendar-xmark")),
+          actionButton("dv_check", "Detect out-of-window visits"),
           hr(), h6("Log a deviation"),
           selectizeInput("dv_record", "Record", NULL),
           selectInput("dv_cat", "Category", c("Eligibility", "Informed consent", "Visit out of window", "Dosing", "Procedure not done", "Other")),
           textAreaInput("dv_desc", "Description", rows = 2), selectInput("dv_sev", "Severity", c("minor", "major")),
-          actionButton("dv_log", "Log deviation", icon = icon("plus")),
+          actionButton("dv_log", "Log deviation"),
           hr(), textInput("dv_close_c", "Closing comment"), actionButton("dv_close", "Close selected")
         ),
         card(card_header("Protocol deviation log"), DTOutput("dv_tbl"))
@@ -225,7 +225,7 @@ ui <- page_navbar(
       card(card_header("Cumulative enrolment by site"), plotlyOutput("sm_enrol", height = 360))),
     nav_panel("CDISC export",
       layout_columns(col_widths = c(3, 9),
-        card(card_header("Export"), downloadButton("cdisc_zip", "Download SDTM + ODM (.zip)"),
+        card(card_header("Export"), downloadButton("cdisc_zip", "Download SDTM + ODM (.zip)", icon = NULL),
              helpText("DM, VS, LB, AE, SV and DS domains (CSV and SAS .xpt), define.xml, and the full study as CDISC ODM 1.3. AEDECOD comes from the coding module.")),
         navset_card_tab(
           nav_panel("DM", DTOutput("sd_dm")), nav_panel("VS", DTOutput("sd_vs")),
@@ -358,7 +358,7 @@ server <- function(input, output, session) {
     cfg <- nx$ledger$get_setting("drw", list())
     links <- nx$drw_links()
     if (!isTRUE(cfg$enabled)) return(helpText("Off. Requires the CDMSTAT DRW External Module in REDCap."))
-    tags$small(icon("circle-check", class = "text-success"), sprintf(" On (module %s): %d linked queries", cfg$prefix, sum(!is.na(links$status_id))))
+    tags$small(sprintf("On (module %s): %d linked queries", cfg$prefix, sum(!is.na(links$status_id))))
   })
   observeEvent(input$drw_enable, {
     s <- notify_err(nx$drw_enable(actor = actor))
@@ -475,8 +475,8 @@ server <- function(input, output, session) {
   output$cut_active <- renderUI({
     state()
     a <- nx$active_cut()
-    if (is.null(a)) return(p(class = "mt-3", icon("bolt"), " Analysing live data"))
-    p(class = "mt-3 text-success", icon("lock"), sprintf(" Analysing cut %s (%s)", a$id, a$label))
+    if (is.null(a)) return(p(class = "mt-3", "Analysing live data"))
+    p(class = "mt-3", sprintf("Analysing cut %s (%s)", a$id, a$label))
   })
 
   # ---- Script
