@@ -45,6 +45,12 @@ jobs:
           bin=$(ls REDCapCDMSTAT_*_R_*.tar.gz)
           version=$(echo "$bin" | sed -E 's/REDCapCDMSTAT_([^_]+)_R_.*/\1/')
           cp "$bin" "$contrib/REDCapCDMSTAT_${version}.tgz"
+          # The webR repository's cardx needs dplyr 1.2.0, which webR does not
+          # have yet; cardx 0.3.1 (pure R) works with webR's dplyr 1.1.4.
+          Rscript -e 'install.packages(c("cards", "dplyr", "tidyr", "glue", "lifecycle", "rlang", "cli"))'
+          curl -sSfLO https://cran.r-project.org/src/contrib/Archive/cardx/cardx_0.3.1.tar.gz
+          R CMD INSTALL --build --no-docs --no-html cardx_0.3.1.tar.gz
+          cp cardx_0.3.1_R_*.tar.gz "$contrib/cardx_0.3.1.tgz"
           Rscript -e 'tools::write_PACKAGES(commandArgs(TRUE)[1], type = "mac.binary")' "$contrib"
           echo "--- PACKAGES"; cat "$contrib/PACKAGES"
           echo "--- Built field"; tar -xOzf "$contrib/REDCapCDMSTAT_${version}.tgz" REDCapCDMSTAT/DESCRIPTION | grep '^Built:'

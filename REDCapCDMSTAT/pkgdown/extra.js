@@ -84,12 +84,20 @@
     if (/ggplot/.test(code)) need.push("ggplot2");
     if (/ggsurvfit/.test(code)) need.push("ggsurvfit");
     if (/knitr::/.test(code)) need.push("knitr");
-    if (/tbl_fit|table_one_gt|gtsummary/.test(code)) need.push("gtsummary");
+    if (/tbl_fit|table_one_gt|gtsummary/.test(code)) need.push("cardx", "broom", "gtsummary");
+    if (/tbl_fit/.test(code)) need.push("broom.helpers");
     if (/tbl_fit\(mm|"mixed"[\s\S]*tbl_fit|tbl_fit[\s\S]*"mixed"/.test(code)) need.push("broom.mixed");
     for (var i = 0; i < need.length; i++) {
       var p = need[i];
       if (installed[p]) continue;
       setStatus("Installing " + p + "…");
+      if (p === "cardx") {
+        // cardx comes from this site's repository (a version that works with
+        // webR's dplyr); its own dependencies come from the webR repository.
+        await rSetup("if (!requireNamespace('cardx', quietly = TRUE)) suppressWarnings({ webr::install(c('cards', 'tidyr'), repos = " + repos() + ", quiet = TRUE); webr::install('cardx', repos = '" + siteRoot() + "webr/', quiet = TRUE) })");
+        installed[p] = true;
+        continue;
+      }
       await rSetup("if (!requireNamespace('" + p + "', quietly = TRUE)) suppressWarnings(webr::install('" + p + "', repos = " + repos() + ", quiet = TRUE))");
       installed[p] = true;
       if (p === "gtsummary") {
