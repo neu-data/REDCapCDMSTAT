@@ -25,7 +25,8 @@ models.
 }
 \examples{
 \donttest{
-if (requireNamespace("gtsummary", quietly = TRUE)) {
+if (requireNamespace("gtsummary", quietly = TRUE) &&
+    requireNamespace("broom.helpers", quietly = TRUE)) {
   nx <- cdmstat_demo(dir = file.path(tempdir(), "tbl-fit"), reset = TRUE)
   tbl_fit(nx$fit("sbp__week_24 ~ arm + sbp__baseline"))
 }

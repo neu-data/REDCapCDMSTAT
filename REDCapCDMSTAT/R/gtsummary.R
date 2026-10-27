@@ -12,14 +12,17 @@
 #' @return A `gtsummary` table.
 #' @examples
 #' \donttest{
-#' if (requireNamespace("gtsummary", quietly = TRUE)) {
+#' if (requireNamespace("gtsummary", quietly = TRUE) &&
+#'     requireNamespace("broom.helpers", quietly = TRUE)) {
 #'   nx <- cdmstat_demo(dir = file.path(tempdir(), "tbl-fit"), reset = TRUE)
 #'   tbl_fit(nx$fit("sbp__week_24 ~ arm + sbp__baseline"))
 #' }
 #' }
 #' @export
 tbl_fit <- function(fit, exponentiate = NULL, ...) {
-  if (!requireNamespace("gtsummary", quietly = TRUE)) stop("Install 'gtsummary' for formatted tables.", call. = FALSE)
+  for (p in c("gtsummary", "broom.helpers")) {
+    if (!requireNamespace(p, quietly = TRUE)) stop("Install '", p, "' for formatted model tables.", call. = FALSE)
+  }
   model <- attr(fit, "model")
   if (is.null(model)) stop("`fit` has no model attached; refit it with nx$fit() or fit_model().", call. = FALSE)
   type <- attr(fit, "type") %||% "linear"

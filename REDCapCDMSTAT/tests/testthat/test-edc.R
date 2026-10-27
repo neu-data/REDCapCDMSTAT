@@ -86,6 +86,8 @@ test_that("portfolio summarises several projects", {
 
 test_that("models and Table 1 format as gtsummary tables", {
   skip_if_not_installed("gtsummary")
+  skip_if_not_installed("broom.helpers")
+  skip_if_not_installed("cardx")
   nx <- cdmstat_demo(dir = tempfile("gt"))
   t1 <- nx$table_one_gt()
   expect_s3_class(t1, "gtsummary")
