@@ -62,6 +62,10 @@ nx$fit("sbp ~ arm * redcap_event_name + (1 | record_id)", "mixed")
 run_app()                  # the same project in the Shiny app
 ```
 
+On the documentation website, the code in the guides runs in your browser
+with [webR](https://docs.r-wasm.org/webr/). Press **Run** on any chunk. Nothing
+is installed on your computer, and no REDCap server or token is needed.
+
 ## Connect your own REDCap project
 
 ```r

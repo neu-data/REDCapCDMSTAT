@@ -43,9 +43,79 @@ img.logo {
   color: $cdm-charcoal;
 }
 
-pre {
+// Code blocks: plain, with a thin neutral border
+pre, div.sourceCode {
   background-color: $cdm-mist;
-  border-left: 4px solid $cdm-red;
+  border: 1px solid $cdm-line;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+div.sourceCode pre {
+  border: 0;
+  margin: 0;
+}
+
+// webR: run the guide code in the browser
+.webr-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: -0.25rem 0 0.75rem;
+  font-size: 0.85rem;
+  color: #5f6b76;
+}
+
+.webr-bar button {
+  border: 1px solid $cdm-line;
+  background: #fff;
+  color: $cdm-charcoal;
+  border-radius: 6px;
+  padding: 0.15rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.webr-bar button:hover:not(:disabled) {
+  border-color: $cdm-charcoal;
+}
+
+.webr-bar button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+pre.webr-output {
+  background: #fff;
+  border: 1px solid $cdm-line;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  margin-bottom: 1rem;
+}
+
+pre.webr-output .webr-err {
+  color: $cdm-red;
+}
+
+.webr-output canvas {
+  max-width: 100%;
+  display: block;
+  margin-top: 0.5rem;
+}
+
+[contenteditable="true"].webr-editing {
+  outline: 1px dashed $cdm-line;
+  outline-offset: 2px;
+}
+
+.webr-panel {
+  background: $cdm-mist;
+  border: 1px solid $cdm-line;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0 1.5rem;
 }
 
 // Tables: plain, readable comparison and feature tables

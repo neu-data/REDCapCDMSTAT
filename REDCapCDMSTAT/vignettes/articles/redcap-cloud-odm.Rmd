@@ -4,7 +4,9 @@ description: "Studies from REDCap Cloud or any EDC that exports CDISC ODM."
 ---
 
 ```{r, include = FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+# Executed chunks are wrapped so the site can run them in the browser with webR.
+knitr::knit_hooks$set(webr = function(before, options) if (before) "\n<div class=\"webr-chunk\">\n" else "\n</div>\n")
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", webr = TRUE)
 ```
 
 The engine does not depend on REDCap: anything that produces **CDISC ODM

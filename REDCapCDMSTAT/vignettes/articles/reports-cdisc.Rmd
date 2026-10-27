@@ -4,7 +4,9 @@ description: "Data cuts, the Quarto report, SDTM, define.xml, ODM and the replay
 ---
 
 ```{r, include = FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+# Executed chunks are wrapped so the site can run them in the browser with webR.
+knitr::knit_hooks$set(webr = function(before, options) if (before) "\n<div class=\"webr-chunk\">\n" else "\n</div>\n")
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", webr = TRUE)
 ```
 
 ```{r}

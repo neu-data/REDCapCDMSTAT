@@ -4,7 +4,9 @@ description: "From REDCap to a signed-off analysis, in one engine."
 ---
 
 ```{r, include = FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.width = 8, fig.height = 4.2, fig.align = "center")
+# Executed chunks are wrapped so the site can run them in the browser with webR.
+knitr::knit_hooks$set(webr = function(before, options) if (before) "\n<div class=\"webr-chunk\">\n" else "\n</div>\n")
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", webr = TRUE, fig.width = 8, fig.height = 4.2, fig.align = "center")
 ```
 
 <div class="pipeline-figure"><img src="../reference/figures/pipeline.svg" alt="REDCap CDMSTAT pipeline" width="100%"></div>

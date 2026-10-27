@@ -38,6 +38,22 @@ jobs:
         working-directory: REDCapCDMSTAT
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
+      # REDCapCDMSTAT compiled for webR, published with the site at /webr/ so
+      # the guides can run in the browser. Must match the webR version the
+      # site loads (pkgdown/extra.js).
+      - name: Build WebAssembly package repository
+        uses: r-wasm/actions/build-rwasm@v2
+        with:
+          packages: local::REDCapCDMSTAT
+          repo-path: REDCapCDMSTAT/docs/webr
+          image-path: _webr_image
+          webr-image: ghcr.io/r-wasm/webr:v0.5.9
+          strip: demo, doc, examples, help, html, include, tests, vignette
+      - name: Check the WebAssembly repository
+        run: |
+          sudo chown -R "$(id -u):$(id -g)" REDCapCDMSTAT/docs
+          ls -R REDCapCDMSTAT/docs/webr | head -30
+          grep -q "Package: REDCapCDMSTAT" REDCapCDMSTAT/docs/webr/bin/emscripten/contrib/*/PACKAGES
       - uses: actions/upload-pages-artifact@v3
         with:
           path: REDCapCDMSTAT/docs
