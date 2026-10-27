@@ -56,6 +56,19 @@ div.sourceCode pre {
   margin: 0;
 }
 
+// Slightly smaller code so typical lines fit without scrolling.
+pre, pre code, div.sourceCode pre code, code {
+  font-size: 0.8rem;
+  line-height: 1.45;
+  // Show code exactly as typed: no "<-" arrows or "!=" symbols.
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+.contents pre {
+  white-space: pre;
+}
+
 // webR: run the guide code in the browser
 .webr-bar {
   display: flex;

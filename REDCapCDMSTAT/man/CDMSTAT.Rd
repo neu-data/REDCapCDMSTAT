@@ -21,7 +21,7 @@ ledger and the analysis state. Create it with \code{\link[=cdmstat_connect]{cdms
 \item{REDCap Data Resolution Workflow}{\verb{$drw_enable(prefix, verify_sdv, lock_in_edc)}, \verb{$drw_sync()}, \verb{$drw_status()}, \verb{$drw_links()}, \verb{$drw_disable()}}
 \item{Data cuts}{\verb{$freeze(label, note)}, \verb{$sign_off(cut_id, comment)}, \verb{$cuts()}, \verb{$use_cut(cut_id, require_signoff)}, \verb{$active_cut()}}
 \item{Analysis}{\verb{$shape(longitudinal, repeating, labels, log, carry_constant)}, \verb{$variables()}, \verb{$arm()},
-\verb{$table_one(by, vars, event, tests, mode)}, \verb{$outliers(field, method, threshold)}, \verb{$trend(field, by)}, \verb{$fit(formula, type, longitudinal, repeating)}}
+\verb{$table_one(by, vars, event, tests, mode)}, \verb{$table_one_gt(by, vars, event, tests, mode)} (gtsummary), \verb{$outliers(field, method, threshold)}, \verb{$trend(field, by)}, \verb{$fit(formula, type, longitudinal, repeating)}}
 \item{Randomisation}{\verb{$setup_randomization(strata, ratio, block_sizes, per_stratum, seed, arm_field)}, \verb{$randomize(record_id)}, \verb{$randomization_status()}}
 \item{Source data verification}{\verb{$sdv_plan(critical_fields, first_n, sample_rate, seed)}, \verb{$sdv_refresh()}, \verb{$sdv_status(required_only)}, \verb{$sdv_verify(unit_keys, comment)}}
 \item{Locking and signatures}{\verb{$lock(record_id, reason, event, form)}, \verb{$unlock(lock_id, reason)}, \verb{$locks()},

@@ -1,117 +1,285 @@
 ---
 title: "Statistical analysis"
-description: "Wrangling, Table 1 with guarded tests, outliers, trends and models."
+description: "Analysis data, Table 1, plots and models, formatted for reports."
 ---
 
 ```{r, include = FALSE}
 # Executed chunks are wrapped so the site can run them in the browser with webR.
 knitr::knit_hooks$set(webr = function(before, options) if (before) "\n<div class=\"webr-chunk\">\n" else "\n</div>\n")
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>", webr = TRUE, fig.width = 8, fig.height = 4, fig.align = "center")
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", webr = TRUE,
+                      fig.width = 7.5, fig.height = 4, fig.align = "center",
+                      out.width = "100%", dpi = 110)
+options(width = 76)
 ```
+
+This guide goes from the study to report-ready tables and figures. It
+uses the simulated two-arm trial, so every result below is reproducible,
+and you can press **Run** to execute any chunk in your browser.
+
+<div class="webr-panel">
+
+**What is `nx`?** `nx` is the name these guides give to the project
+**engine**: the object returned by `cdmstat_demo()`, `cdmstat_connect()` or
+`cdmstat_setup()`. It is not a dataset. It holds the connection, the
+cached data, the data dictionary and the audit ledger, and you ask it for
+things with `$`, e.g. `nx$table_one()` or `nx$fit()`. You can call it
+anything, for example `trial <- cdmstat_demo()`.
+
+Datasets come out of the engine as ordinary data frames, under names *you*
+choose. Here, `wide` is one row per subject and `long` is one row per
+subject and visit. Column names follow the REDCap fields: `sbp` in long
+data, and `sbp__week_24` (field, two underscores, visit) in wide data.
+
+</div>
+
+## 1. Open the study
 
 ```{r}
 library(REDCapCDMSTAT)
-nx <- cdmstat_demo(dir = file.path(tempdir(), "stats"), reset = TRUE, actor = "sam")
+library(ggplot2)
+
+# The engine for the simulated trial (a real study: cdmstat_setup()).
+nx <- cdmstat_demo(dir = file.path(tempdir(), "stats"),
+                   reset = TRUE, actor = "sam")
+
+# Arm colours used in every plot below.
+arm_cols <- c("Drug A" = "#A01621", "Placebo" = "#2C5D8F")
 ```
 
-## Wrangling longitudinal and repeating data
-
-One call chooses how events and repeating instruments are laid out, and the
-variable list shows what that choice makes available:
+## 2. Analysis datasets
 
 ```{r}
-long <- nx$shape("long", "drop")
-wide <- nx$shape("wide", "collapse")
-c(long = nrow(long), wide = nrow(wide))
-v <- attr(wide, "variables")
-head(v[v$type != "id", c("name", "type", "event", "label")], 12)
-grep("^(n_|any_|max_)", names(wide), value = TRUE)
+# One row per subject: visit fields become field__visit columns, and the
+# repeating adverse-event form is summarised (n_, any_, max_ columns).
+wide <- nx$shape(longitudinal = "wide", repeating = "collapse")
+
+# One row per subject and visit, for repeated-measures analyses.
+# carry_constant copies subject-level fields (arm, age, ...) to
+# every visit row; in REDCap they are recorded only at baseline.
+long <- nx$shape(longitudinal = "long", repeating = "drop",
+                 carry_constant = TRUE)
+
+c(subjects = nrow(wide), visit_rows = nrow(long))
+
+# What was created, with labels from the data dictionary.
+vars <- attr(wide, "variables")
+head(vars[vars$type != "id", c("name", "type", "label")], 8)
 ```
 
-| `longitudinal` | `repeating` | Result |
-|---|---|---|
-| `"long"` | `"drop"` | one row per subject and visit; repeating forms removed |
-| `"wide"` | `"collapse"` | one row per subject; visit-varying fields become `field__event`; repeating forms summarised (`n_`, `any_`, `max_`) |
-| either | `"only"` | the repeating-instrument rows themselves |
+## 3. Table 1
 
-## Table 1 with guarded test selection
+The treatment arm and the baseline variables are found in the data
+dictionary. CDMSTAT chooses each summary and test from the data
+(Shapiro-Wilk normality, expected cell counts), and gtsummary lays the
+table out:
 
-The arm is detected from the dictionary (a radio or dropdown field named
-like `arm` or labelled "randomised"). The baseline variables are the
-analysable fields at the first event, excluding identifiers, dates and free
-text.
+```{r}
+# Baseline characteristics by randomised arm, with p-values.
+nx$table_one_gt()
+```
+
+Why each test was chosen:
 
 ```{r}
 t1 <- nx$table_one()
-t1[t1$variable %in% c("age", "sex", "sbp", "hba1c", "pregnant"), c("label", "level", "Drug A", "Placebo", "p_value", "test", "rationale")]
+why <- t1[nzchar(t1$test), c("label", "test", "rationale")]
+knitr::kable(why, row.names = FALSE)
 ```
 
-- **Continuous variables** are tested for normality within each arm
-  (Shapiro-Wilk). If normal, they're summarised as mean (SD) with a Welch
-  t-test; if not, as median [IQR] with a Wilcoxon test.
-- **Categorical variables** use a chi-squared test, or Fisher's exact test
-  when any expected count is below 5.
-
-That automatic choice suits **exploratory** analysis. For a **confirmatory**
-analysis, the tests must come from the statistical analysis plan, and SAP
-mode enforces that:
+For a confirmatory analysis, pre-specify the tests from the statistical
+analysis plan and use `mode = "sap"`. CDMSTAT then refuses any variable
+without one:
 
 ```{r}
-try(nx$table_one(mode = "sap"))
-nx$table_one(vars = c("age", "sex"), tests = list(age = "t.test", sex = "chisq"), mode = "sap")[, c("label", "level", "p_value", "test", "rationale")]
+nx$table_one_gt(vars = c("age", "sex", "sbp"),
+                tests = list(age = "wilcox", sex = "chisq",
+                             sbp = "t.test"),
+                mode = "sap")
 ```
 
-## Outliers that become queries
+## 4. Look at the data
 
-```{r}
+### Baseline distributions
+
+```{r baseline-box}
+base <- long[long$redcap_event_name == "baseline_arm_1", ]
+
+ggplot(base, aes(arm, sbp, colour = arm)) +
+  geom_boxplot(outlier.shape = NA, width = 0.5) +
+  geom_jitter(width = 0.12, alpha = 0.5, size = 1.4) +
+  scale_colour_manual(values = arm_cols, guide = "none") +
+  labs(x = NULL, y = "Systolic BP at baseline (mmHg)") +
+  theme_minimal(base_size = 12)
+```
+
+### Individual trajectories and arm means
+
+```{r trajectories, fig.height = 4.4}
+# Visit order and readable names from the study's event schedule.
+ev <- nx$events
+long$visit <- factor(long$redcap_event_name,
+                     levels = ev$unique_event_name,
+                     labels = ev$event_name)
+
+# Arm means with 95% confidence intervals.
+tr <- nx$trend("sbp")
+tr$visit <- factor(tr$event, levels = ev$unique_event_name,
+                   labels = ev$event_name)
+names(tr)[names(tr) == "group"] <- "arm"
+
+ggplot(long, aes(visit, sbp, colour = arm)) +
+  geom_line(aes(group = record_id), alpha = 0.15) +
+  geom_pointrange(data = tr, aes(y = mean, ymin = lower, ymax = upper),
+                  position = position_dodge(width = 0.3), size = 0.5) +
+  geom_line(data = tr, aes(y = mean, group = arm), linewidth = 1,
+            position = position_dodge(width = 0.3)) +
+  scale_colour_manual(values = arm_cols) +
+  coord_cartesian(ylim = c(90, 180)) +
+  labs(x = NULL, y = "Systolic BP (mmHg)", colour = NULL) +
+  theme_minimal(base_size = 12) + theme(legend.position = "top")
+```
+
+### Outliers become queries
+
+```{r outliers}
+# Robust z-scores within each visit; |z| > 3 is flagged.
 o <- nx$outliers("weight")
-o[o$outlier, ]
+long$flag <- o$outlier[match(paste(long$record_id, long$redcap_event_name),
+                             paste(o$record_id, o$event))]
+
+ggplot(long, aes(height, weight)) +
+  geom_point(aes(colour = flag %in% TRUE), alpha = 0.7) +
+  geom_text(data = long[long$flag %in% TRUE, ],
+            aes(label = paste("record", record_id)),
+            hjust = -0.15, size = 3.4) +
+  scale_colour_manual(values = c(`FALSE` = "grey60", `TRUE` = "#A01621"),
+                      labels = c("within range", "outlier"),
+                      name = NULL) +
+  labs(x = "Height (cm)", y = "Weight (kg)") +
+  theme_minimal(base_size = 12) + theme(legend.position = "top")
 ```
 
-Scores are robust z-scores (from the median and MAD) within each visit, so
-one extreme value cannot hide itself by inflating the standard deviation.
-In the apps, clicking a flagged point raises the query.
-
-## Trends by arm
+Each flagged point can be raised as a query in one line, which is what
+clicking the point does in the apps:
 
 ```{r}
-tr <- nx$trend("weight")
-tr[, c("event", "group", "n", "mean", "lower", "upper")]
+nx$add_query("7", "weight", "Weight 450 kg is implausible",
+             event = "baseline_arm_1", value = "450",
+             source = "analysis")
 ```
 
-## Models
+### Time to the primary endpoint
 
-All models run on the shaped data. Formulas use the shaped column names.
+```{r km, fig.height = 4.6}
+km <- ggsurvfit::survfit2(
+  survival::Surv(followup_days, event_occurred == "Yes") ~ arm,
+  data = wide)
 
-```{r}
-# ANCOVA: week-24 SBP adjusted for baseline (wide data)
-nx$fit("sbp__week_24 ~ arm + sbp__baseline", "linear")[, c("term", "estimate", "conf_low", "conf_high", "p_value")]
-
-# Logistic: any serious adverse event (repeating form collapsed per subject)
-nx$fit("any_ae_serious ~ arm", "logistic")[, c("term", "odds_ratio", "ratio_low", "ratio_high", "p_value")]
-
-# Cox: time to the primary endpoint
-nx$fit("Surv(followup_days, event_occurred == 'Yes') ~ arm + age", "cox")[, c("term", "hazard_ratio", "ratio_low", "ratio_high", "p_value")]
-
-# Mixed model for repeated measures (long data, record-level fields carried to each visit)
-mm <- nx$fit("sbp ~ arm * redcap_event_name + (1 | record_id)", "mixed")
-mm[, c("term", "estimate", "conf_low", "conf_high", "p_value")]
-attr(mm, "random_effects")
+ggsurvfit::ggsurvfit(km, linewidth = 1) +
+  ggsurvfit::add_confidence_interval() +
+  ggsurvfit::add_risktable() +
+  scale_colour_manual(values = unname(arm_cols)) +
+  scale_fill_manual(values = unname(arm_cols)) +
+  labs(x = "Days since randomisation", y = "Event-free probability") +
+  theme(legend.position = "top")
 ```
 
-The simulated drug lowers systolic BP by about 9 mmHg versus placebo at week
-24, and the mixed model recovers it (the `armPlacebo:...week_24` term).
+### Adverse events
 
-## Reproducibility
+```{r ae}
+ae <- nx$shape(repeating = "only")
+ae$arm <- wide$arm[match(ae$record_id, wide$record_id)]
 
-Each call above was logged. `nx$script()` returns a linear R script that
-replays them, with the project connection read from the environment, never a
-token:
+ggplot(ae, aes(y = ae_term, fill = arm)) +
+  geom_bar(position = "dodge") +
+  scale_fill_manual(values = arm_cols) +
+  labs(x = "Adverse events (n)", y = "Reported term (verbatim)",
+       fill = NULL) +
+  theme_minimal(base_size = 12) + theme(legend.position = "top")
+```
+
+## 5. Models
+
+`nx$fit()` fits the model on the shaped data and `tbl_fit()` formats it
+for a report, with dictionary labels and, for logistic and Cox models,
+odds and hazard ratios.
+
+**ANCOVA**: week-24 systolic BP adjusted for baseline.
 
 ```{r}
-cat(tail(strsplit(nx$script(), "\n")[[1]], 12), sep = "\n")
+ancova <- nx$fit("sbp__week_24 ~ arm + sbp__baseline", "linear")
+tbl_fit(ancova)
+```
+
+**Logistic regression**: any serious adverse event.
+
+```{r}
+logit <- nx$fit("any_ae_serious ~ arm + age", "logistic")
+tbl_fit(logit)
+```
+
+**Cox regression**: time to the primary endpoint.
+
+```{r}
+cox <- nx$fit(
+  "Surv(followup_days, event_occurred == 'Yes') ~ arm + age", "cox")
+tbl_fit(cox)
+```
+
+**Mixed model** for the repeated blood-pressure measurements, with a random
+intercept per subject:
+
+```{r}
+mm <- nx$fit("sbp ~ arm * redcap_event_name + (1 | record_id)",
+             "mixed")
+tbl_fit(mm)
+```
+
+### Treatment effect over time
+
+The mixed model gives the Placebo minus Drug A difference at each visit,
+combining the main effect with the visit interaction:
+
+```{r effect-plot, fig.height = 3.4}
+m <- attr(mm, "model")
+b <- lme4::fixef(m)
+V <- as.matrix(stats::vcov(m))
+
+# Contrast for each visit: arm effect + arm-by-visit interaction.
+L <- sapply(ev$unique_event_name, function(e) {
+  w <- as.numeric(names(b) == "armPlacebo")
+  int <- paste0("armPlacebo:redcap_event_name", e)
+  if (int %in% names(b)) w[names(b) == int] <- 1
+  w
+})
+est <- drop(t(L) %*% b)
+se <- sqrt(diag(t(L) %*% V %*% L))
+eff <- data.frame(visit = factor(ev$event_name, levels = ev$event_name),
+                  est, lo = est - 1.96 * se, hi = est + 1.96 * se)
+
+ggplot(eff, aes(visit, est, ymin = lo, ymax = hi)) +
+  geom_hline(yintercept = 0, linetype = 2, colour = "grey50") +
+  geom_pointrange(colour = "#A01621", linewidth = 0.8) +
+  labs(x = NULL, y = "Placebo minus Drug A\nsystolic BP (mmHg, 95% CI)") +
+  theme_minimal(base_size = 12)
+```
+
+By chance, the placebo arm starts about 6 mmHg lower than Drug A at
+baseline. By week 24 it is about 3 mmHg higher, because systolic BP falls on
+Drug A and not on placebo. The difference in change from baseline to week
+24 is the `Placebo * Week 24` term in the table above, about 9 mmHg. That
+is the simulated drug effect.
+
+## 6. Reproducibility
+
+Every analytic call above was logged. `nx$script()` returns a linear R
+script that replays them. The script connects to the study from the
+environment, so it never contains a token:
+
+```{r}
+cat(tail(strsplit(nx$script(), "\n")[[1]], 10), sep = "\n")
 ```
 
 To pin an analysis to a frozen, signed-off dataset, call
-`nx$use_cut(cut_id, require_signoff = TRUE)` first. See
+`nx$use_cut(cut_id, require_signoff = TRUE)` first; see
 [Reports, CDISC and reproducibility](reports-cdisc.html).

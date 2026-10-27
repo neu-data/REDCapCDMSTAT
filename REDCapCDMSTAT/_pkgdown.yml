@@ -151,6 +151,7 @@ reference:
       - detect_outliers
       - trend_summary
       - fit_model
+      - tbl_fit
   - title: Standards and exchange
     contents:
       - read_odm

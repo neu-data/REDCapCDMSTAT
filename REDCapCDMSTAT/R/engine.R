@@ -13,7 +13,7 @@
 #' \item{REDCap Data Resolution Workflow}{`$drw_enable(prefix, verify_sdv, lock_in_edc)`, `$drw_sync()`, `$drw_status()`, `$drw_links()`, `$drw_disable()`}
 #' \item{Data cuts}{`$freeze(label, note)`, `$sign_off(cut_id, comment)`, `$cuts()`, `$use_cut(cut_id, require_signoff)`, `$active_cut()`}
 #' \item{Analysis}{`$shape(longitudinal, repeating, labels, log, carry_constant)`, `$variables()`, `$arm()`,
-#'   `$table_one(by, vars, event, tests, mode)`, `$outliers(field, method, threshold)`, `$trend(field, by)`, `$fit(formula, type, longitudinal, repeating)`}
+#'   `$table_one(by, vars, event, tests, mode)`, `$table_one_gt(by, vars, event, tests, mode)` (gtsummary), `$outliers(field, method, threshold)`, `$trend(field, by)`, `$fit(formula, type, longitudinal, repeating)`}
 #' \item{Randomisation}{`$setup_randomization(strata, ratio, block_sizes, per_stratum, seed, arm_field)`, `$randomize(record_id)`, `$randomization_status()`}
 #' \item{Source data verification}{`$sdv_plan(critical_fields, first_n, sample_rate, seed)`, `$sdv_refresh()`, `$sdv_status(required_only)`, `$sdv_verify(unit_keys, comment)`}
 #' \item{Locking and signatures}{`$lock(record_id, reason, event, form)`, `$unlock(lock_id, reason)`, `$locks()`,
@@ -315,7 +315,10 @@ CDMSTAT <- R6::R6Class("CDMSTAT",
                    repeating = "collapse") {
       self$log_code(sprintf("fit <- nx$fit(%s, type = %s, longitudinal = %s, repeating = %s)", deparse(formula),
                             deparse(type), deparse(longitudinal), deparse(repeating)))
-      fit_model(formula, self$shape(longitudinal, repeating, log = FALSE, carry_constant = longitudinal == "long"), type)
+      out <- fit_model(formula, self$shape(longitudinal, repeating, log = FALSE, carry_constant = longitudinal == "long"), type)
+      ev <- private$cut$events %||% self$events
+      if (!is.null(ev) && NROW(ev)) attr(out, "event_labels") <- stats::setNames(ev$event_name, ev$unique_event_name)
+      out
     },
 
     # ---- Reproducibility --------------------------------------------------

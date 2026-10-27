@@ -135,6 +135,15 @@ shape_data <- function(data, md, mapping = NULL, repeating_forms = character(), 
     }
   }
   kinds <- field_kinds(md)
+  # Dictionary labels on each column, used by gtsummary and plots.
+  for (cc in names(out)) {
+    f <- base_field(cc)
+    if (f %in% md$field_name) {
+      ev <- colmap[[cc]]$event %||% NA_character_
+      visit <- if (!is.na(ev)) tools::toTitleCase(gsub("_", " ", sub("_arm_[0-9]+$", "", ev))) else ""
+      attr(out[[cc]], "label") <- paste0(field_label(md, f), if (nzchar(visit)) paste0(", ", visit) else "")
+    }
+  }
   attr(out, "variables") <- data.frame(
     name = names(out),
     field = vapply(names(out), base_field, ""),

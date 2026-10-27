@@ -274,6 +274,7 @@ fit_model <- function(formula, data, type = c("linear", "logistic", "cox", "mixe
     attr(out, "random_effects") <- vc[, intersect(c("grp", "var1", "var2", "vcov", "sdcor"), names(vc))]
     attr(out, "type") <- type
     attr(out, "p_method") <- "Wald z"
+    attr(out, "model") <- m
     return(out)
   }
   m <- switch(type,
@@ -283,7 +284,7 @@ fit_model <- function(formula, data, type = c("linear", "logistic", "cox", "mixe
       if (!requireNamespace("survival", quietly = TRUE)) stop("Install 'survival' for Cox models.")
       env <- list2env(list(Surv = survival::Surv), parent = environment(f))
       environment(f) <- env
-      survival::coxph(f, data = data)
+      survival::coxph(f, data = data, model = TRUE)
     })
   s <- summary(m)$coefficients
   est <- s[, 1]
@@ -300,5 +301,6 @@ fit_model <- function(formula, data, type = c("linear", "logistic", "cox", "mixe
   }
   attr(out, "n") <- stats::nobs(m)
   attr(out, "type") <- type
+  attr(out, "model") <- m
   out
 }

@@ -67,7 +67,7 @@
       await rSetup("suppressWarnings(webr::install('REDCapCDMSTAT', repos = " + repos() + ", quiet = TRUE))");
       var ok = await webR.evalRBoolean("'REDCapCDMSTAT' %in% rownames(installed.packages())");
       if (!ok) throw new Error("REDCapCDMSTAT could not be installed from " + siteRoot() + "webr/");
-      await rSetup("suppressPackageStartupMessages(library(REDCapCDMSTAT)); options(width = 90)");
+      await rSetup("suppressPackageStartupMessages(library(REDCapCDMSTAT)); options(width = 76)");
       installed.REDCapCDMSTAT = true;
       setStatus("R is running in your browser (webR " + (await webR.evalRString("as.character(getRversion())")) + ").");
     })();
@@ -78,15 +78,24 @@
   // Optional packages, installed only when a chunk needs them.
   async function ensurePackages(code) {
     var need = [];
-    if (/Surv\(|"cox"/.test(code)) need.push("survival");
-    if (/\(1 \||"mixed"/.test(code)) need.push("lme4");
+    if (/Surv\(|"cox"|survival::/.test(code)) need.push("survival");
+    if (/\(1 \||"mixed"|lme4::/.test(code)) need.push("lme4");
     if (/odm|ODM/.test(code)) need.push("xml2");
+    if (/ggplot/.test(code)) need.push("ggplot2");
+    if (/ggsurvfit/.test(code)) need.push("ggsurvfit");
+    if (/knitr::/.test(code)) need.push("knitr");
+    if (/tbl_fit|table_one_gt|gtsummary/.test(code)) need.push("gtsummary");
+    if (/tbl_fit\(mm|"mixed"[\s\S]*tbl_fit|tbl_fit[\s\S]*"mixed"/.test(code)) need.push("broom.mixed");
     for (var i = 0; i < need.length; i++) {
       var p = need[i];
       if (installed[p]) continue;
       setStatus("Installing " + p + "…");
       await rSetup("if (!requireNamespace('" + p + "', quietly = TRUE)) suppressWarnings(webr::install('" + p + "', repos = " + repos() + ", quiet = TRUE))");
       installed[p] = true;
+      if (p === "gtsummary") {
+        // The browser console is plain text: print gtsummary tables as text.
+        await rSetup("gtsummary::set_gtsummary_theme(list('pkgwide-str:print_engine' = 'kable'))");
+      }
     }
   }
 

@@ -38,8 +38,12 @@ nx <- cdmstat_demo(dir = file.path(tempdir(), "get-started"), reset = TRUE, acto
 nx
 ```
 
-`nx` is a [CDMSTAT] engine object. Its methods cover the whole workflow; see
-`?CDMSTAT` for the full list.
+`nx` is the name these guides give to the project **engine**. It isn't a
+dataset: it holds the connection, the cached data, the data dictionary and
+the audit ledger, and you call its methods with `$` (see `?CDMSTAT` for the
+full list). The name is only a convention, so `trial <- cdmstat_demo()`
+works just as well. Datasets come out of it as ordinary data frames, under
+names you choose, e.g. `wide <- nx$shape("wide")`.
 
 ## Find the data problems
 

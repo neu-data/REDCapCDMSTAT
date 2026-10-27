@@ -19,6 +19,15 @@ portfolio dashboard are built on it.
 \details{
 Start with \code{\link[=cdmstat_demo]{cdmstat_demo()}}, then see \link{CDMSTAT} for the methods.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://neu-data.github.io/REDCapCDMSTAT/}
+  \item \url{https://github.com/neu-data/REDCapCDMSTAT}
+  \item Report bugs at \url{https://github.com/neu-data/REDCapCDMSTAT/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Neudata Consultancy \email{b.osangir@gmail.com}
 

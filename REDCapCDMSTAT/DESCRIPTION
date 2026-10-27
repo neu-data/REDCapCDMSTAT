@@ -39,6 +39,12 @@ Suggests:
     askpass,
     survival,
     lme4,
+    broom.mixed,
+    gtsummary,
+    tidyselect,
+    gt,
+    ggplot2,
+    ggsurvfit,
     markdown,
     knitr,
     rmarkdown,
@@ -71,5 +77,6 @@ Collate:
     'drw.R'
     'portfolio.R'
     'connection.R'
+    'gtsummary.R'
     'launch.R'
 Config/roxygen2/version: 8.0.0
