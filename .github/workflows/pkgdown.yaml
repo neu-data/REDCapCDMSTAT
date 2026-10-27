@@ -19,7 +19,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # REDCapCDMSTAT for webR, so the guides can run in the browser. The package
+  # is pure R, so a binary built with the same R version as the webR release
+  # the site loads (webR v0.5.9 = R 4.5.1, see pkgdown/extra.js) works there.
+  webr-package:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.5.1'
+          use-public-rspm: true
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: REDCapCDMSTAT
+          dependencies: '"hard"'
+      - name: Build the webR package repository
+        run: |
+          contrib=webr-repo/bin/emscripten/contrib/4.5
+          mkdir -p "$contrib"
+          R CMD build --no-build-vignettes --no-manual REDCapCDMSTAT
+          R CMD INSTALL --build --no-docs --no-html REDCapCDMSTAT_*.tar.gz
+          bin=$(ls REDCapCDMSTAT_*_R_*.tar.gz)
+          version=$(echo "$bin" | sed -E 's/REDCapCDMSTAT_([^_]+)_R_.*/\1/')
+          cp "$bin" "$contrib/REDCapCDMSTAT_${version}.tgz"
+          Rscript -e 'tools::write_PACKAGES(commandArgs(TRUE)[1], type = "mac.binary")' "$contrib"
+          echo "--- PACKAGES"; cat "$contrib/PACKAGES"
+          echo "--- Built field"; tar -xOzf "$contrib/REDCapCDMSTAT_${version}.tgz" REDCapCDMSTAT/DESCRIPTION | grep '^Built:'
+          tar -xOzf "$contrib/REDCapCDMSTAT_${version}.tgz" REDCapCDMSTAT/DESCRIPTION | grep -q '^Built: R 4.5.1; ;'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webr-repo
+          path: webr-repo
+
   build:
+    needs: webr-package
     runs-on: ubuntu-latest
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
@@ -38,22 +74,13 @@ jobs:
         working-directory: REDCapCDMSTAT
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
-      # REDCapCDMSTAT compiled for webR, published with the site at /webr/ so
-      # the guides can run in the browser. Must match the webR version the
-      # site loads (pkgdown/extra.js).
-      - name: Build WebAssembly package repository
-        uses: r-wasm/actions/build-rwasm@v2
+      - uses: actions/download-artifact@v4
         with:
-          packages: local::REDCapCDMSTAT
-          repo-path: REDCapCDMSTAT/docs/webr
-          image-path: _webr_image
-          webr-image: ghcr.io/r-wasm/webr:v0.5.9
-          strip: demo, doc, examples, help, html, include, tests, vignette
-      - name: Check the WebAssembly repository
+          name: webr-repo
+          path: REDCapCDMSTAT/docs/webr
+      - name: Check the webR repository is in the site
         run: |
-          sudo chown -R "$(id -u):$(id -g)" REDCapCDMSTAT/docs
-          ls -R REDCapCDMSTAT/docs/webr | head -30
-          grep -q "Package: REDCapCDMSTAT" REDCapCDMSTAT/docs/webr/bin/emscripten/contrib/*/PACKAGES
+          grep -q "Package: REDCapCDMSTAT" REDCapCDMSTAT/docs/webr/bin/emscripten/contrib/4.5/PACKAGES
       - uses: actions/upload-pages-artifact@v3
         with:
           path: REDCapCDMSTAT/docs

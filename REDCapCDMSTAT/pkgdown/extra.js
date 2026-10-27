@@ -1,6 +1,7 @@
 // Run the guide code in the browser with webR (https://docs.r-wasm.org/webr/).
 // Pinned to webR v0.5.9 (R 4.5): RSQLite, which the ledger needs, loads there
-// but not yet in v0.6.0. Keep in step with webr-image in pkgdown.yaml.
+// but not yet in v0.6.0. Keep in step with the R version of the webr-package
+// job in .github/workflows/pkgdown.yaml.
 //
 // Executed chunks (wrapped in div.webr-chunk by a knitr hook) get Run and Edit
 // buttons. R runs on the reader's device; REDCapCDMSTAT is installed from the
