@@ -21,7 +21,13 @@
     return url.href.replace(/index\.html$/, "");
   }
 
-  var REPOS = 'c("' + siteRoot() + 'webr/", "' + CRAN_WASM + '")';
+  // Resolved when R starts: this script loads in <head>, before the navbar
+  // (used to find the site root) exists.
+  var REPOS = null;
+  function repos() {
+    if (!REPOS) REPOS = 'c("' + siteRoot() + 'webr/", "' + CRAN_WASM + '")';
+    return REPOS;
+  }
   var webR = null;
   var ready = null;
   var queue = Promise.resolve();
@@ -36,6 +42,18 @@
     document.querySelectorAll(".webr-status").forEach(function (el) { el.textContent = text; });
   }
 
+
+  // Setup steps (installs, library) run through captureR, like the chunks:
+  // in this webR release evalRVoid() did not complete package installs.
+  async function rSetup(code) {
+    var shelter = await new webR.Shelter();
+    try {
+      await shelter.captureR(code, { captureStreams: true, captureConditions: false });
+    } finally {
+      shelter.purge();
+    }
+  }
+
   function start() {
     if (ready) return ready;
     ready = (async function () {
@@ -45,9 +63,11 @@
       await webR.init();
       setStatus("Installing REDCapCDMSTAT and its dependencies (first run only)…");
       // webR warns that it falls back to .tgz extraction; that is expected, and a
-      // warning would otherwise abort evalRVoid().
-      await webR.evalRVoid("suppressWarnings(webr::install('REDCapCDMSTAT', repos = " + REPOS + ", quiet = TRUE))");
-      await webR.evalRVoid("suppressPackageStartupMessages(library(REDCapCDMSTAT)); options(width = 90)");
+      // warning would otherwise abort the install.
+      await rSetup("suppressWarnings(webr::install('REDCapCDMSTAT', repos = " + repos() + ", quiet = TRUE))");
+      var ok = await webR.evalRBoolean("'REDCapCDMSTAT' %in% rownames(installed.packages())");
+      if (!ok) throw new Error("REDCapCDMSTAT could not be installed from " + siteRoot() + "webr/");
+      await rSetup("suppressPackageStartupMessages(library(REDCapCDMSTAT)); options(width = 90)");
       installed.REDCapCDMSTAT = true;
       setStatus("R is running in your browser (webR " + (await webR.evalRString("as.character(getRversion())")) + ").");
     })();
@@ -65,7 +85,7 @@
       var p = need[i];
       if (installed[p]) continue;
       setStatus("Installing " + p + "…");
-      await webR.evalRVoid("if (!requireNamespace('" + p + "', quietly = TRUE)) suppressWarnings(webr::install('" + p + "', repos = " + REPOS + ", quiet = TRUE))");
+      await rSetup("if (!requireNamespace('" + p + "', quietly = TRUE)) suppressWarnings(webr::install('" + p + "', repos = " + repos() + ", quiet = TRUE))");
       installed[p] = true;
     }
   }
