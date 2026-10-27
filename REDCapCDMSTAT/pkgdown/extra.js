@@ -44,7 +44,9 @@
       webR = new mod.WebR();
       await webR.init();
       setStatus("Installing REDCapCDMSTAT and its dependencies (first run only)…");
-      await webR.evalRVoid("webr::install('REDCapCDMSTAT', repos = " + REPOS + ", quiet = TRUE)");
+      // webR warns that it falls back to .tgz extraction; that is expected, and a
+      // warning would otherwise abort evalRVoid().
+      await webR.evalRVoid("suppressWarnings(webr::install('REDCapCDMSTAT', repos = " + REPOS + ", quiet = TRUE))");
       await webR.evalRVoid("suppressPackageStartupMessages(library(REDCapCDMSTAT)); options(width = 90)");
       installed.REDCapCDMSTAT = true;
       setStatus("R is running in your browser (webR " + (await webR.evalRString("as.character(getRversion())")) + ").");
@@ -63,7 +65,7 @@
       var p = need[i];
       if (installed[p]) continue;
       setStatus("Installing " + p + "…");
-      await webR.evalRVoid("if (!requireNamespace('" + p + "', quietly = TRUE)) webr::install('" + p + "', repos = " + REPOS + ", quiet = TRUE)");
+      await webR.evalRVoid("if (!requireNamespace('" + p + "', quietly = TRUE)) suppressWarnings(webr::install('" + p + "', repos = " + REPOS + ", quiet = TRUE))");
       installed[p] = true;
     }
   }
